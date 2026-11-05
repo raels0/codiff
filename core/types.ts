@@ -156,6 +156,7 @@ export type ReviewSource =
     }
   | {
       author?: ReviewAuthor;
+      baseSha?: string;
       canEditDescription?: boolean;
       canEditReviewers?: boolean;
       canEditTitle?: boolean;

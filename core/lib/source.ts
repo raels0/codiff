@@ -73,7 +73,16 @@ const sourceCapabilitiesByType = {
   },
 } satisfies Record<ReviewSource['type'], SourceCapabilities>;
 
-const getSourceCapabilities = (source: ReviewSource) => sourceCapabilitiesByType[source.type];
+const azureDevOpsCapabilities = {
+  ...sourceCapabilitiesByType['pull-request'],
+  lazyDiffContent: true,
+  preloadDiffSearchContent: true,
+};
+
+const getSourceCapabilities = (source: ReviewSource) =>
+  source.type === 'pull-request' && source.provider === 'azure-devops'
+    ? azureDevOpsCapabilities
+    : sourceCapabilitiesByType[source.type];
 
 export const getSourceKey = (source: ReviewSource) =>
   source.type === 'commit'

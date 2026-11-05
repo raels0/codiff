@@ -16,6 +16,7 @@ const {
   normalizeAzureDevOpsReviewComment,
   parseAzureDevOpsPullRequestUrl,
   readAzureDevOpsPullRequestState,
+  readAzureDevOpsSectionContent,
   resolveAzureDevOpsContentRefs,
   submitAzureDevOpsComment,
   submitAzureDevOpsReview,
@@ -176,56 +177,95 @@ describe('Azure DevOps pull requests', { concurrent: false }, () => {
     });
   });
 
-  test('loads the cumulative PR diff independently of the checkout and target-only changes', async () => {
-    await withFakeAzureDevOps(async (repo) => {
-      const git = async (...args: ReadonlyArray<string>) =>
-        (
-          await execFileAsync('git', ['-C', repo, ...args], { env: getGitTestEnvironment() })
-        ).stdout.trim();
-      await writeFile(join(repo, 'base.txt'), 'base\n');
-      await git('add', '.');
-      await git('commit', '-m', 'base');
-      const base = await git('rev-parse', 'HEAD');
-      await git('checkout', '-b', 'feature');
-      await writeFile(join(repo, 'new file.txt'), 'feature change\n');
-      await mkdir(join(repo, 'tests'));
-      await writeFile(join(repo, 'tests', 'check.txt'), 'nested feature change\n');
-      await git('add', '.');
-      await git('commit', '-m', 'feature');
-      const head = await git('rev-parse', 'HEAD');
-      await git('update-ref', 'refs/remotes/origin/feature', base);
-      await git('checkout', '--detach', base);
-      await writeFile(join(repo, 'requirements.txt'), 'target-only\n');
-      await git('add', '.');
-      await git('commit', '-m', 'target advanced');
-      const target = await git('rev-parse', 'HEAD');
-      await writeFile(join(repo, 'base.txt'), 'uncommitted local change\n');
-      await using _metadata = createTemporaryEnvironment({
-        CODIFF_AZ_TEST_METADATA: JSON.stringify({
-          lastMergeSourceCommit: { commitId: head },
-          lastMergeTargetCommit: { commitId: target },
-          title: 'Review feature',
-        }),
+  test(
+    'loads a checkout-independent PR snapshot and rejects a changed merge-base',
+    { timeout: 20_000 },
+    async () => {
+      await withFakeAzureDevOps(async (repo, readCalls) => {
+        const git = async (...args: ReadonlyArray<string>) =>
+          (
+            await execFileAsync('git', ['-C', repo, ...args], { env: getGitTestEnvironment() })
+          ).stdout.trim();
+        await writeFile(join(repo, 'base.txt'), 'base\n');
+        await git('add', '.');
+        await git('commit', '-m', 'base');
+        const base = await git('rev-parse', 'HEAD');
+        await git('checkout', '-b', 'feature');
+        await writeFile(join(repo, 'new file.txt'), 'feature change\n');
+        await mkdir(join(repo, 'tests'));
+        await writeFile(join(repo, 'tests', 'check.txt'), 'nested feature change\n');
+        await git('add', '.');
+        await git('commit', '-m', 'feature');
+        const head = await git('rev-parse', 'HEAD');
+        await git('update-ref', 'refs/remotes/origin/feature', base);
+        await git('checkout', '--detach', base);
+        await writeFile(join(repo, 'requirements.txt'), 'target-only\n');
+        await git('add', '.');
+        await git('commit', '-m', 'target advanced');
+        const target = await git('rev-parse', 'HEAD');
+        await writeFile(join(repo, 'base.txt'), 'uncommitted local change\n');
+        await using _metadata = createTemporaryEnvironment({
+          CODIFF_AZ_TEST_METADATA: JSON.stringify({
+            lastMergeSourceCommit: { commitId: head },
+            lastMergeTargetCommit: { commitId: target },
+            title: 'Review feature',
+          }),
+        });
+        const url = 'https://dev.azure.com/mpc-tech-hub/MPCM/_git/Dashboard/pullrequest/492';
+        expect(
+          await resolveAzureDevOpsContentRefs(repo, parseAzureDevOpsPullRequestUrl(url), {
+            lastMergeSourceCommit: { commitId: head },
+            lastMergeTargetCommit: { commitId: target },
+          }),
+        ).toEqual({ base, head });
+        const state = await readAzureDevOpsPullRequestState(repo, { type: 'pull-request', url });
+        if (state.source.type !== 'pull-request') {
+          throw new Error('Expected a pull request snapshot.');
+        }
+        expect(state.files.map(({ path }) => path)).toEqual(['tests/check.txt', 'new file.txt']);
+        for (const file of state.files) {
+          expect(file.sections[0].patch).toContain(`diff --git a/${file.path} b/${file.path}`);
+          expect(file.sections[0].patch).toContain(
+            file.path === 'new file.txt' ? '+feature change' : '+nested feature change',
+          );
+          const section = await readAzureDevOpsSectionContent(repo, {
+            force: true,
+            kind: 'pull-request',
+            path: file.path,
+            source: state.source,
+          });
+          expect(section.patch).toBe(file.sections[0].patch);
+          expect(section.id).toBe(file.sections[0].id);
+        }
+        expect(await git('rev-parse', 'HEAD')).toBe(target);
+        expect(await readFile(join(repo, 'base.txt'), 'utf8')).toBe('uncommitted local change\n');
+        await using _advancedTarget = createTemporaryEnvironment({
+          CODIFF_AZ_TEST_METADATA: JSON.stringify({
+            lastMergeSourceCommit: { commitId: head },
+            lastMergeTargetCommit: { commitId: head },
+            title: 'Review feature',
+          }),
+        });
+        await expect(
+          readAzureDevOpsSectionContent(repo, {
+            kind: 'pull-request',
+            path: state.files[0].path,
+            source: state.source,
+          }),
+        ).rejects.toThrow('comparison base changed');
+        await expect(
+          submitAzureDevOpsReview(repo, {
+            comments: [],
+            event: 'APPROVE',
+            source: state.source,
+          }),
+        ).rejects.toThrow('comparison base changed');
+        expect(
+          (await readCalls()).every(({ args }) => args[args.indexOf('--method') + 1] === 'GET'),
+        ).toBe(true);
       });
-      const url = 'https://dev.azure.com/mpc-tech-hub/MPCM/_git/Dashboard/pullrequest/492';
-      expect(
-        await resolveAzureDevOpsContentRefs(repo, parseAzureDevOpsPullRequestUrl(url), {
-          lastMergeSourceCommit: { commitId: head },
-          lastMergeTargetCommit: { commitId: target },
-        }),
-      ).toEqual({ base, head });
-      const state = await readAzureDevOpsPullRequestState(repo, { type: 'pull-request', url });
-      expect(state.files.map(({ path }) => path)).toEqual(['tests/check.txt', 'new file.txt']);
-      for (const file of state.files) {
-        expect(file.sections[0].patch).toContain(`diff --git a/${file.path} b/${file.path}`);
-        expect(file.sections[0].patch).toContain(
-          file.path === 'new file.txt' ? '+feature change' : '+nested feature change',
-        );
-      }
-      expect(await git('rev-parse', 'HEAD')).toBe(target);
-      expect(await readFile(join(repo, 'base.txt'), 'utf8')).toBe('uncommitted local change\n');
-    });
-  });
+    },
+  );
 
   test.skipIf(process.platform === 'win32')(
     'fetches missing PR objects without changing refs or FETCH_HEAD',

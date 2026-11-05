@@ -120,7 +120,7 @@ const createAzureDevOpsClient = (repoRoot, pullRequest) => {
         ],
         {
           cwd: repoRoot,
-          env: await getCommandEnvironment(),
+          env: { ...(await getCommandEnvironment()), PYTHONIOENCODING: 'utf-8' },
           maxBuffer: 64 * 1024 * 1024,
           timeout: 120_000,
           windowsHide: true,

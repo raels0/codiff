@@ -100,10 +100,15 @@ const normalizeAuthor = (author) => ({
   url: author?._links?.web?.href || author?.url,
 });
 
-/** @param {ReturnType<typeof parseAzureDevOpsPullRequestUrl>} pr @param {AzurePullRequest} metadata @returns {PullRequestSource} */
-const createSource = (pr, metadata) => ({
+/** @param {ReturnType<typeof parseAzureDevOpsPullRequestUrl>} pr @param {AzurePullRequest} metadata @param {string} baseSha @returns {PullRequestSource} */
+const createSource = (pr, metadata, baseSha) => ({
   author: normalizeAuthor(metadata.createdBy),
+  baseSha,
+  canEditDescription: false,
+  canEditReviewers: false,
+  canEditTitle: false,
   description: metadata.description?.trim(),
+  draft: metadata.isDraft,
   headSha: metadata.lastMergeSourceCommit?.commitId,
   host: pr.host,
   number: pr.number,
@@ -142,16 +147,27 @@ const assertCurrentHead = (source, metadata) => {
 };
 
 /** @param {Awaited<ReturnType<typeof openReview>>} review @param {PullRequestSource} [source] */
-const readSnapshot = async (review, source) => {
+const readSnapshotRefs = async (review, source) => {
   const metadata = await review.client.metadata();
   assertCurrentHead(source, metadata);
   const { base, head } = await resolveAzureDevOpsContentRefs(review.root, review.pr, metadata);
+  if (source?.baseSha && source.baseSha !== base) {
+    throw new Error(
+      'The pull request comparison base changed. Refresh it before continuing the review.',
+    );
+  }
+  return { base, head, metadata };
+};
+
+/** @param {Awaited<ReturnType<typeof openReview>>} review @param {PullRequestSource} [source] */
+const readSnapshot = async (review, source) => {
+  const { base, head, metadata } = await readSnapshotRefs(review, source);
   const status = parseCommitNameStatus(
     await git(review.root, ['diff', '--name-status', '-r', '-z', '-M', base, head]),
     // Batch patches follow Git's order; the comparison reader sorts the finished files.
     { sort: false },
   );
-  return { base, head, status, source: createSource(review.pr, metadata) };
+  return { base, head, status, source: createSource(review.pr, metadata, base) };
 };
 
 /** @param {DiffSection} section @param {string} path @param {number} number @returns {DiffSection} */
@@ -295,9 +311,9 @@ const createAzureDevOpsThreadContext = (comment) => {
 };
 
 /** @param {Awaited<ReturnType<typeof openReview>>} review @param {PullRequestSource} source */
-const assertReviewHead = async (review, source) => {
+const assertReviewSnapshot = async (review, source) => {
   if (source.headSha) {
-    assertCurrentHead(source, await review.client.metadata());
+    await readSnapshotRefs(review, source);
   }
 };
 
@@ -311,7 +327,7 @@ const submitAzureDevOpsComment = async (launchPath, request) => {
     submitted = await review.client.reply(comment.threadId, comment.body);
     threadId = comment.threadId;
   } else {
-    await assertReviewHead(review, request.source);
+    await assertReviewSnapshot(review, request.source);
     const thread = await review.client.createThread({
       comments: [{ commentType: 1, content: comment.body, parentCommentId: 0 }],
       status: 1,
@@ -348,7 +364,7 @@ const submitAzureDevOpsReview = async (launchPath, request) => {
     throw new Error(`Azure DevOps reviews do not support ${request.event}.`);
   }
   const review = await openReview(launchPath, request.source);
-  await assertReviewHead(review, request.source);
+  await assertReviewSnapshot(review, request.source);
   for (const comment of request.comments) {
     await review.client.createThread({
       comments: [{ commentType: 1, content: comment.body, parentCommentId: 0 }],
