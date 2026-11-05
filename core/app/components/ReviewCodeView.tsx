@@ -596,7 +596,7 @@ function MarkdownPreview({
 }
 
 const getPullRequestDescriptionLabel = (source: Extract<ReviewSource, { type: 'pull-request' }>) =>
-  source.provider === 'github'
+  source.provider === 'github' || source.provider === 'azure-devops'
     ? 'PR description'
     : source.provider === 'gitlab'
       ? 'MR description'
@@ -3513,7 +3513,9 @@ export function ReviewCodeView({
   }, []);
 
   const canCreateFileComments =
-    !isReadOnly && source.type === 'pull-request' && source.provider === 'gitlab';
+    !isReadOnly &&
+    source.type === 'pull-request' &&
+    (source.provider === 'gitlab' || source.provider === 'azure-devops');
 
   const createFileComment = useCallback(
     (meta: CodeViewItemMetadata, itemId: string) => {

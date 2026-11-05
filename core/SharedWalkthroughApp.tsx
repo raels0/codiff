@@ -975,7 +975,12 @@ export function ReviewSurface({
         onMarkPullRequestReady={markPullRequestReady}
         onSubmitReview={submitReview}
         reviewStatus={source.reviewStatus}
-        showCommentReview={source.provider === 'github' || source.host === 'github.com'}
+        showCommentReview={
+          source.provider === 'github' ||
+          source.provider === 'azure-devops' ||
+          source.host === 'github.com' ||
+          source.host === 'dev.azure.com'
+        }
       >
         {sourceMergeStatusBadge}
       </PullRequestReviewButtons>

@@ -2,7 +2,7 @@
 
 const { execFileSync } = require('node:child_process');
 
-/** @typedef {'github' | 'gitlab'} ReviewProvider */
+/** @typedef {'github' | 'gitlab' | 'azure-devops'} ReviewProvider */
 
 // Reviews are usually pasted straight from a browser, so anything after the review number is a tab
 // (`/files`, `/changes`, `/diffs`), a query, or an anchor, and none of it identifies the review.
@@ -10,6 +10,10 @@ const gitHubPullRequestPattern = /^\/([^/]+)\/([^/]+)\/pull\/([1-9]\d*)(?:\/.*)?
 const gitLabMergeRequestPattern = /^\/(.+?)\/-\/merge_requests\/([1-9]\d*)(?:\/.*)?$/;
 // GitLab only introduced the `/-/` separator in 11.0; older instances and links still omit it.
 const legacyGitLabMergeRequestPattern = /^\/(.+?)\/merge_requests\/([1-9]\d*)(?:\/.*)?$/;
+const azureDevOpsPullRequestPattern =
+  /^\/(.+?)\/_git\/([^/]+)\/pullrequests?\/([1-9]\d*)(?:\/.*)?$/i;
+const azureDevOpsGitRemotePattern = /^(.+)\/_git\/([^/]+)$/i;
+const azureDevOpsSshRemotePattern = /^v3\/([^/]+)\/([^/]+)\/([^/]+)$/i;
 const markdownAutolinkPattern = /^<(.+)>$/;
 const schemePattern = /^[A-Za-z][A-Za-z\d+.-]*:/;
 // A scheme-less paste only counts as a URL when it starts with something host-shaped, so relative
@@ -18,6 +22,135 @@ const hostPrefixPattern = /^[^/\s:@]+\.[^/\s:@]+(?::\d+)?\//;
 
 /** @param {string} value */
 const stripGitSuffix = (value) => value.replace(/\.git$/i, '');
+
+/** @param {string} value */
+const decodePathSegment = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+/** @param {string} hostname */
+const isGitHubHost = (hostname) => {
+  const normalized = hostname.toLowerCase();
+  return normalized === 'github.com' || normalized === 'www.github.com';
+};
+
+/** @param {string} hostname */
+const isAzureDevOpsSshHost = (hostname) => {
+  const normalized = hostname.toLowerCase();
+  return normalized === 'ssh.dev.azure.com' || normalized === 'vs-ssh.visualstudio.com';
+};
+
+/** @param {string} hostname */
+const isAzureDevOpsWebHost = (hostname) => {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === 'dev.azure.com' ||
+    normalized === 'www.dev.azure.com' ||
+    normalized.endsWith('.visualstudio.com')
+  );
+};
+
+/** @param {string} hostname */
+const isAzureDevOpsHost = (hostname) =>
+  isAzureDevOpsWebHost(hostname) || isAzureDevOpsSshHost(hostname);
+
+/** @param {string} value */
+const encodePath = (value) => value.split('/').map(encodeURIComponent).join('/');
+
+/**
+ * @param {string} webHost
+ * @param {string} organization
+ * @param {string} project
+ * @param {string} repo
+ * @param {number} [number]
+ */
+const formatAzureDevOpsUrl = (webHost, organization, project, repo, number) => {
+  const encodedProject = encodePath(project);
+  const encodedRepo = encodeURIComponent(repo);
+  const suffix = number == null ? '' : `/pullrequest/${number}`;
+  if (webHost.endsWith('.visualstudio.com')) {
+    return `https://${webHost}/${encodedProject}/_git/${encodedRepo}${suffix}`;
+  }
+  return `https://${webHost}/${encodePath(organization)}/${encodedProject}/_git/${encodedRepo}${suffix}`;
+};
+
+/**
+ * @param {string} hostname
+ * @param {string} projectPath
+ * @returns {{
+ *   apiBase: string;
+ *   host: string;
+ *   organization: string;
+ *   organizationUrl: string;
+ *   project: string;
+ *   projectPath: string;
+ *   provider: 'azure-devops';
+ *   repo: string;
+ *   webHost: string;
+ * } | null}
+ */
+const parseAzureDevOpsRemote = (hostname, projectPath) => {
+  const host = hostname.toLowerCase();
+  const path = stripGitSuffix(projectPath).replace(/^\/+/, '');
+  let organization;
+  let project;
+  let repo;
+  if (isAzureDevOpsSshHost(host)) {
+    const match = path.match(azureDevOpsSshRemotePattern);
+    if (!match) {
+      return null;
+    }
+    [organization, project, repo] = match.slice(1).map(decodePathSegment);
+  } else {
+    const match = isAzureDevOpsWebHost(host) ? path.match(azureDevOpsGitRemotePattern) : null;
+    if (!match) {
+      return null;
+    }
+    const prefix = match[1].split('/').map(decodePathSegment);
+    repo = decodePathSegment(match[2]);
+    if (host.endsWith('.visualstudio.com')) {
+      organization = host.slice(0, -'.visualstudio.com'.length);
+      if (prefix[0]?.toLowerCase() === 'defaultcollection') {
+        prefix.shift();
+      }
+      if (prefix.length > 1) {
+        return null;
+      }
+      project = prefix[0] || repo;
+    } else {
+      if (prefix.length > 2) {
+        return null;
+      }
+      organization = prefix[0];
+      project = prefix[1] || repo;
+    }
+  }
+  if (!organization || !project || !repo) {
+    return null;
+  }
+  const webHost = host.endsWith('.visualstudio.com')
+    ? `${organization}.visualstudio.com`
+    : 'dev.azure.com';
+  const organizationUrl =
+    webHost === 'dev.azure.com'
+      ? `https://${webHost}/${encodeURIComponent(organization)}`
+      : `https://${webHost}`;
+  return {
+    apiBase: `${organizationUrl}/${encodeURIComponent(project)}`,
+    host,
+    organization,
+    organizationUrl,
+    project,
+    projectPath: `${organization}/${project}/${repo}`,
+    provider: /** @type {const} */ ('azure-devops'),
+    repo,
+    webHost,
+  };
+};
 
 /** @param {string} value */
 const toReviewUrl = (value) => {
@@ -40,12 +173,6 @@ const toReviewUrl = (value) => {
   }
 };
 
-/** @param {URL} url */
-const isGitHubHost = (url) => {
-  const hostname = url.hostname.toLowerCase();
-  return hostname === 'github.com' || hostname === 'www.github.com';
-};
-
 /** @param {string} value */
 const parseReviewUrl = (value) => {
   const url = toReviewUrl(value);
@@ -53,7 +180,7 @@ const parseReviewUrl = (value) => {
     return null;
   }
 
-  const github = isGitHubHost(url) ? url.pathname.match(gitHubPullRequestPattern) : null;
+  const github = isGitHubHost(url.hostname) ? url.pathname.match(gitHubPullRequestPattern) : null;
   const repo = github ? stripGitSuffix(github[2]) : '';
   if (github && repo) {
     return {
@@ -64,6 +191,27 @@ const parseReviewUrl = (value) => {
       provider: /** @type {const} */ ('github'),
       repo,
       url: `https://github.com/${github[1]}/${repo}/pull/${github[3]}`,
+    };
+  }
+
+  const azurePath = url.pathname.match(azureDevOpsPullRequestPattern);
+  const azureRemote =
+    azurePath && isAzureDevOpsWebHost(url.hostname)
+      ? parseAzureDevOpsRemote(url.hostname, `${azurePath[1]}/_git/${azurePath[2]}`)
+      : null;
+  if (azurePath && azureRemote) {
+    const number = Number(azurePath[3]);
+    return {
+      ...azureRemote,
+      host: azureRemote.webHost,
+      number,
+      url: formatAzureDevOpsUrl(
+        azureRemote.webHost,
+        azureRemote.organization,
+        azureRemote.project,
+        azureRemote.repo,
+        number,
+      ),
     };
   }
 
@@ -87,35 +235,42 @@ const parseReviewUrl = (value) => {
 /** @param {string} value */
 const parseRemoteUrl = (value) => {
   const trimmed = value.trim();
-  const scp = trimmed.match(/^(?:[^@/\s]+@)?([^:/\s]+):(.+)$/);
+  const scp = trimmed.match(/^(?:[^@/\s]+@)*([^@/\s:]+):(.+)$/);
   if (scp && !trimmed.includes('://') && !/^[A-Za-z]:/.test(trimmed)) {
+    const host = scp[1].toLowerCase();
     const projectPath = scp[2].replaceAll(/^\/+|\.git$/gi, '');
-    return projectPath
-      ? {
-          host: scp[1].toLowerCase(),
-          projectPath,
-          provider: /** @type {ReviewProvider} */ (
-            scp[1].toLowerCase() === 'github.com' ? 'github' : 'gitlab'
-          ),
-        }
-      : null;
+    if (!projectPath) {
+      return null;
+    }
+    const azure = parseAzureDevOpsRemote(host, projectPath);
+    if (azure) {
+      return azure;
+    }
+    return {
+      host,
+      projectPath,
+      provider: /** @type {'github' | 'gitlab'} */ (isGitHubHost(host) ? 'github' : 'gitlab'),
+    };
   }
 
   try {
     const url = new URL(trimmed);
+    const host = (url.protocol === 'ssh:' ? url.hostname : url.host).toLowerCase();
     const projectPath = url.pathname.replaceAll(/^\/+|\.git$/gi, '');
-    return projectPath
-      ? {
-          // A custom SSH port (`ssh://git@host:2222/...`) is transport detail, not part
-          // of the instance identifier, and glab's `--hostname` rejects `host:port` —
-          // strip it. An explicit port on `https://` remotes stays: it identifies the instance.
-          host: (url.protocol === 'ssh:' ? url.hostname : url.host).toLowerCase(),
-          projectPath,
-          provider: /** @type {ReviewProvider} */ (
-            url.hostname.toLowerCase() === 'github.com' ? 'github' : 'gitlab'
-          ),
-        }
-      : null;
+    if (!projectPath) {
+      return null;
+    }
+    const azure = parseAzureDevOpsRemote(url.hostname, projectPath);
+    if (azure) {
+      return azure;
+    }
+    return {
+      host,
+      projectPath,
+      provider: /** @type {'github' | 'gitlab'} */ (
+        isGitHubHost(url.hostname) ? 'github' : 'gitlab'
+      ),
+    };
   } catch {
     return null;
   }
@@ -149,6 +304,30 @@ const remotePriority = (remote) =>
       : 3;
 
 /**
+ * `codiff pr` is GitHub-first, but Azure DevOps also calls them pull requests.
+ * Prefer a GitHub remote when both exist; otherwise use the Azure remote.
+ *
+ * @param {ReviewProvider | undefined} provider
+ * @param {{provider: ReviewProvider}} remote
+ */
+const remoteMatchesProvider = (provider, remote) =>
+  !provider ||
+  remote.provider === provider ||
+  (provider === 'github' && remote.provider === 'azure-devops');
+
+/**
+ * @param {ReviewProvider | undefined} provider
+ * @param {{provider: ReviewProvider}} left
+ * @param {{provider: ReviewProvider}} right
+ */
+const providerPriority = (provider, left, right) => {
+  if (provider !== 'github') {
+    return 0;
+  }
+  return (left.provider === 'github' ? 0 : 1) - (right.provider === 'github' ? 0 : 1);
+};
+
+/**
  * @param {string} repositoryPath
  * @param {number} number
  * @param {ReviewProvider | undefined} provider
@@ -164,17 +343,38 @@ const resolveReviewUrl = (repositoryPath, number, provider) => {
   }
 
   const remote = remotes
-    .filter((candidate) => !provider || candidate.provider === provider)
-    .sort((left, right) => remotePriority(left) - remotePriority(right))[0];
+    .filter((candidate) => remoteMatchesProvider(provider, candidate))
+    .sort(
+      (left, right) =>
+        providerPriority(provider, left, right) || remotePriority(left) - remotePriority(right),
+    )[0];
   if (!remote) {
     throw new Error(
-      `Could not resolve ${provider === 'gitlab' ? 'MR' : provider === 'github' ? 'PR' : 'review'} #${number} from this repository's remotes.`,
+      `Could not resolve ${
+        provider === 'gitlab'
+          ? 'MR'
+          : provider === 'azure-devops'
+            ? 'Azure DevOps PR'
+            : provider === 'github'
+              ? 'PR'
+              : 'review'
+      } #${number} from this repository's remotes.`,
     );
   }
 
-  return remote.provider === 'github'
-    ? `https://github.com/${remote.projectPath}/pull/${number}`
-    : `https://${remote.host}/${remote.projectPath}/-/merge_requests/${number}`;
+  if (remote.provider === 'github') {
+    return `https://github.com/${remote.projectPath}/pull/${number}`;
+  }
+  if (remote.provider === 'azure-devops') {
+    return formatAzureDevOpsUrl(
+      remote.webHost,
+      remote.organization,
+      remote.project,
+      remote.repo,
+      number,
+    );
+  }
+  return `https://${remote.host}/${remote.projectPath}/-/merge_requests/${number}`;
 };
 
 module.exports = {
