@@ -15,10 +15,10 @@ const {
   createAzureDevOpsThreadContext,
   normalizeAzureDevOpsReviewComment,
   parseAzureDevOpsPullRequestUrl,
-  submitAzureDevOpsComment,
-  submitAzureDevOpsReview,
   readAzureDevOpsPullRequestState,
   resolveAzureDevOpsContentRefs,
+  submitAzureDevOpsComment,
+  submitAzureDevOpsReview,
 } =
   require('../../electron/git-state/azure-devops.cjs') as typeof import('../../electron/git-state/azure-devops.cjs');
 
@@ -167,12 +167,12 @@ describe('Azure DevOps pull requests', { concurrent: false }, () => {
     await writeFile(python, '');
     await chmod(python, 0o755);
     expect(getAzCommandTransport(join(wbin, 'az.cmd'), 'win32')).toEqual({
-      command: join(wbin, '..', 'python.exe'),
       args: ['-m', 'azure.cli'],
+      command: join(wbin, '..', 'python.exe'),
     });
     expect(getAzCommandTransport(process.execPath, 'win32')).toEqual({
-      command: process.execPath,
       args: [],
+      command: process.execPath,
     });
   });
 
@@ -496,7 +496,7 @@ describe('Azure DevOps pull requests', { concurrent: false }, () => {
       };
       await expect(
         submitAzureDevOpsComment(repo, {
-          comment: { body: 'Comment.', filePath: 'src/a.ts', anchor: 'file' },
+          comment: { anchor: 'file', body: 'Comment.', filePath: 'src/a.ts' },
           source,
         }),
       ).rejects.toThrow('Refresh');
