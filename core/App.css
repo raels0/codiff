@@ -998,6 +998,19 @@ a.review-top-bar-source:focus-visible {
   color: var(--sidebar-text);
 }
 
+.review-top-bar-refresh {
+  font: 600 11px/1.35 var(--font-sans);
+  gap: 5px;
+  padding: 0 6px;
+  width: auto;
+}
+
+.review-top-bar-refresh:disabled {
+  background: transparent;
+  cursor: default;
+  opacity: 0.5;
+}
+
 .sidebar-resizer {
   -webkit-app-region: no-drag;
   border-left: 1px solid var(--sidebar-border);
@@ -1080,6 +1093,18 @@ a.review-top-bar-source:focus-visible {
 
 .repository-change-banner:not(.visible) {
   opacity: 0;
+}
+
+.repository-change-banner.error {
+  background: color-mix(in srgb, var(--danger) 10%, var(--code-bg));
+  border-color: color-mix(in srgb, var(--danger) 36%, transparent);
+  color: var(--danger);
+  max-width: min(680px, calc(100vw - 32px));
+}
+
+.repository-change-banner.error .repository-change-banner-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .repository-change-banner-content {

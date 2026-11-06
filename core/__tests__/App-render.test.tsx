@@ -3239,6 +3239,124 @@ test('clicking the change banner refreshes the repository in place', async () =>
   expect(container.textContent).not.toContain('-old\n+new\n');
 });
 
+test('PR refresh fetches the latest snapshot before history and preserves review UI state', async () => {
+  const source = {
+    baseSha: 'old-base',
+    headSha: 'old-head',
+    number: 12,
+    provider: 'azure-devops',
+    type: 'pull-request',
+    url: 'https://dev.azure.com/example/project/_git/repo/pullrequest/12',
+  } satisfies ReviewSource;
+  const initialState = {
+    ...repositoryState,
+    files: [createChangedFile('src/initial.ts')],
+    source,
+  } satisfies RepositoryState;
+  const refreshedState = {
+    ...initialState,
+    files: [...initialState.files, createChangedFile('src/added.ts')],
+    source: { ...source, baseSha: 'new-base', headSha: 'new-head' },
+  } satisfies RepositoryState;
+  const pending = Promise.withResolvers<RepositoryState>();
+  const getRepositoryState = vi
+    .fn<Window['codiff']['getRepositoryState']>()
+    .mockResolvedValueOnce(initialState)
+    .mockImplementation(() => pending.promise);
+  const getRepositoryHistory = vi.fn<Window['codiff']['getRepositoryHistory']>(async () => ({
+    entries: [],
+    root: '/repo',
+  }));
+  let refresh: (() => void) | undefined;
+  window.codiff = createCodiffMock({
+    getRepositoryHistory,
+    getRepositoryState,
+    onRefreshRequest: (callback) => {
+      refresh = callback;
+      return () => {};
+    },
+  });
+  await using app = await renderReact(<App />);
+  const button = () =>
+    app.container.querySelector<HTMLButtonElement>('[aria-label="Refresh pull request"]');
+  await waitFor(() => expect(button()).not.toBeNull());
+  const filter = app.container.querySelector<HTMLInputElement>(
+    '[aria-label="Filter changed files"]',
+  )!;
+  await act(async () => setInputValue(filter, 'src/'));
+  const historyRequests = getRepositoryHistory.mock.calls.length;
+  await act(async () => {
+    button()!.click();
+    button()!.click();
+    refresh?.();
+  });
+  expect(button()!.disabled).toBe(true);
+  expect(button()!.getAttribute('aria-busy')).toBe('true');
+  expect(button()!.textContent).toContain('Refreshing');
+  expect(getRepositoryState).toHaveBeenCalledTimes(2);
+  expect(getRepositoryHistory).toHaveBeenCalledTimes(historyRequests);
+  await act(async () => pending.resolve(refreshedState));
+  await waitFor(() => expect(app.container.textContent).toContain('added.ts'));
+  expect(getRepositoryHistory).toHaveBeenLastCalledWith(expect.any(Number), refreshedState.source);
+  expect(filter.value).toBe('src/');
+  expect(button()!.disabled).toBe(false);
+  expect(button()!.getAttribute('aria-busy')).toBe('false');
+});
+
+test.each(['state', 'history'] as const)(
+  'PR refresh shows %s failures, keeps the current review, and can retry',
+  async (failure) => {
+    const source = {
+      baseSha: 'old-base',
+      headSha: 'old-head',
+      number: 12,
+      provider: 'azure-devops',
+      type: 'pull-request',
+      url: 'https://dev.azure.com/example/project/_git/repo/pullrequest/12',
+    } satisfies ReviewSource;
+    const initialState = {
+      ...repositoryState,
+      files: [createChangedFile('src/initial.ts')],
+      source,
+    } satisfies RepositoryState;
+    const refreshedState = {
+      ...initialState,
+      files: [createChangedFile('src/updated.ts')],
+      source: { ...source, headSha: 'new-head' },
+    } satisfies RepositoryState;
+    const getRepositoryState = vi
+      .fn<Window['codiff']['getRepositoryState']>()
+      .mockResolvedValue(initialState);
+    const getRepositoryHistory = vi.fn<Window['codiff']['getRepositoryHistory']>(async () => ({
+      entries: [],
+      root: '/repo',
+    }));
+    window.codiff = createCodiffMock({ getRepositoryHistory, getRepositoryState });
+    await using app = await renderReact(<App />);
+    const button = () =>
+      app.container.querySelector<HTMLButtonElement>('[aria-label="Refresh pull request"]');
+    await waitFor(() => expect(button()).not.toBeNull());
+    getRepositoryState.mockResolvedValue(refreshedState);
+    const failingRequest = failure === 'state' ? getRepositoryState : getRepositoryHistory;
+    failingRequest.mockRejectedValueOnce(new Error('Remote PR is unavailable.'));
+    await act(async () => button()!.click());
+    await waitFor(() =>
+      expect(app.container.querySelector('[role="alert"]')?.textContent).toContain(
+        'Refresh failed: Remote PR is unavailable.',
+      ),
+    );
+    expect(app.container.textContent).toContain('initial.ts');
+    expect(app.container.textContent).not.toContain('updated.ts');
+    expect(button()!.disabled).toBe(false);
+    await act(async () =>
+      app.container.querySelector<HTMLButtonElement>('.repository-change-reload')!.click(),
+    );
+    await waitFor(() => expect(app.container.textContent).toContain('updated.ts'));
+    expect(app.container.querySelector('[role="alert"]')).toBeNull();
+    expect(button()!.disabled).toBe(false);
+  },
+);
+
 test('refreshing all changes re-resolves the branch snapshot', async () => {
   const initialSource = {
     baseRef: 'base123',
