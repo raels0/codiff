@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { PassThrough } from 'node:stream';
@@ -97,6 +98,37 @@ test('marks historical snapshot candidates as unsafe for editor fallback', async
     });
   }
 });
+
+test.each(['additions', 'deletions'] as const)(
+  'searches the Azure PR %s snapshot rather than synthetic GitHub refs',
+  async (side) => {
+    await using directory = await createTemporaryDirectory('codiff-definitions-azure-');
+    createDefinitionNavigationRepository(directory.path);
+    const sha = execFileSync('git', ['-C', directory.path, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+    const result = await findDefinitions(directory.path, {
+      ...request,
+      kind: 'pull-request',
+      side,
+      source: {
+        baseSha: sha,
+        headSha: sha,
+        number: 42,
+        provider: 'azure-devops',
+        type: 'pull-request',
+        url: 'https://dev.azure.com/org/project/_git/repo/pullrequest/42',
+      },
+    });
+    expect(result.status).toBe('ready');
+    if (result.status === 'ready') {
+      expect(result.candidates[0]).toMatchObject({
+        canOpenInEditor: false,
+        path: 'src/greeting.ts',
+      });
+    }
+  },
+);
 
 test('parses revision-prefixed git grep records', () => {
   expect(

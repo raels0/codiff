@@ -49,6 +49,15 @@ const {
   submitMergeRequestComment,
   submitMergeRequestReview,
 } = require('./git-state/merge-request.cjs');
+const {
+  listAzureDevOpsHistory,
+  parseAzureDevOpsPullRequestUrl,
+  readAzureDevOpsImageContent,
+  readAzureDevOpsPullRequestState,
+  readAzureDevOpsSectionContent,
+  submitAzureDevOpsComment,
+  submitAzureDevOpsReview,
+} = require('./git-state/azure-devops.cjs');
 const { parseReviewUrl } = require('./review-source.cjs');
 const {
   readDiffSectionContent: readWorkingTreeDiffSectionContent,
@@ -72,10 +81,7 @@ const { annotateGeneratedFiles } = require('./generated-files.cjs');
 const readRepositoryState = async (launchPath, source = { type: 'working-tree' }, options = {}) => {
   const state =
     source.type === 'pull-request'
-      ? await (isGitLabReviewSource(source) ? readMergeRequestState : readPullRequestState)(
-          launchPath,
-          source,
-        )
+      ? await getPullRequestProvider(source).readState(launchPath, source)
       : source.type === 'commit'
         ? await readCommitState(launchPath, source.ref)
         : source.type === 'range'
@@ -150,9 +156,33 @@ const readWalkthroughRepositoryState = async (launchPath, source, options = {}) 
   };
 };
 
+const pullRequestProviders = {
+  github: {
+    readState: readPullRequestState,
+    readHistory: listPullRequestHistory,
+    readImage: readPullRequestImageContent,
+    submitComment: submitPullRequestComment,
+    submitReview: submitPullRequestReview,
+  },
+  gitlab: {
+    readState: readMergeRequestState,
+    readHistory: listMergeRequestHistory,
+    readImage: readMergeRequestImageContent,
+    submitComment: submitMergeRequestComment,
+    submitReview: submitMergeRequestReview,
+  },
+  'azure-devops': {
+    readState: readAzureDevOpsPullRequestState,
+    readHistory: listAzureDevOpsHistory,
+    readImage: readAzureDevOpsImageContent,
+    submitComment: submitAzureDevOpsComment,
+    submitReview: submitAzureDevOpsReview,
+  },
+};
+
 /** @param {Extract<ReviewSource, {type: 'pull-request'}>} source */
-const isGitLabReviewSource = (source) =>
-  source.provider === 'gitlab' || parseReviewUrl(source.url)?.provider === 'gitlab';
+const getPullRequestProvider = (source) =>
+  pullRequestProviders[parseReviewUrl(source.url)?.provider || source.provider || 'github'];
 
 /** @param {Extract<ReviewSource, {type: 'branch' | 'branch-diff' | 'branch-working-tree'}>} source */
 const getBranchHistoryRef = (source) =>
@@ -163,11 +193,7 @@ const getBranchHistoryRef = (source) =>
 /** @param {string} launchPath @param {number} [limit] @param {ReviewSource} [source] @returns {Promise<RepositoryHistory>} */
 const readRepositoryHistory = (launchPath, limit, source) =>
   source?.type === 'pull-request'
-    ? (isGitLabReviewSource(source) ? listMergeRequestHistory : listPullRequestHistory)(
-        launchPath,
-        source,
-        limit,
-      )
+    ? getPullRequestProvider(source).readHistory(launchPath, source, limit)
     : listRepositoryHistory(
         launchPath,
         limit,
@@ -180,33 +206,34 @@ const readRepositoryHistory = (launchPath, limit, source) =>
 
 /** @param {string} launchPath @param {DiffSectionContentRequest} request */
 const readDiffSectionContent = async (launchPath, request) =>
-  request.source?.type === 'range'
-    ? readRangeSectionContent(
-        launchPath,
-        request.source.base,
-        request.source.head,
-        request.source.symmetric,
-        request.path,
-        { force: request.force },
-      )
-    : request.source?.type === 'branch' || request.source?.type === 'branch-diff'
-      ? readBranchSectionContent(launchPath, request.source, request.path, {
-          force: request.force,
-        })
-      : request.source?.type === 'branch-working-tree'
-        ? readBranchWorkingTreeSectionContent(launchPath, request)
-        : request.kind === 'commit' || request.source?.type === 'commit'
-          ? readCommitSectionContent(launchPath, request.source?.ref || 'HEAD', request.path, {
-              force: request.force,
-            })
-          : readWorkingTreeDiffSectionContent(launchPath, request);
+  request.source?.type === 'pull-request' &&
+  parseReviewUrl(request.source.url)?.provider === 'azure-devops'
+    ? readAzureDevOpsSectionContent(launchPath, request)
+    : request.source?.type === 'range'
+      ? readRangeSectionContent(
+          launchPath,
+          request.source.base,
+          request.source.head,
+          request.source.symmetric,
+          request.path,
+          { force: request.force },
+        )
+      : request.source?.type === 'branch' || request.source?.type === 'branch-diff'
+        ? readBranchSectionContent(launchPath, request.source, request.path, {
+            force: request.force,
+          })
+        : request.source?.type === 'branch-working-tree'
+          ? readBranchWorkingTreeSectionContent(launchPath, request)
+          : request.kind === 'commit' || request.source?.type === 'commit'
+            ? readCommitSectionContent(launchPath, request.source?.ref || 'HEAD', request.path, {
+                force: request.force,
+              })
+            : readWorkingTreeDiffSectionContent(launchPath, request);
 
 /** @param {string} launchPath @param {DiffImageContentRequest} request @returns {Promise<DiffImageContentResult>} */
 const readDiffImageContent = (launchPath, request) =>
   request.source?.type === 'pull-request'
-    ? (isGitLabReviewSource(request.source)
-        ? readMergeRequestImageContent
-        : readPullRequestImageContent)(launchPath, request.source, request.path)
+    ? getPullRequestProvider(request.source).readImage(launchPath, request.source, request.path)
     : request.source?.type === 'range'
       ? readRangeImageContent(
           launchPath,
@@ -238,6 +265,7 @@ module.exports = {
   normalizeGitLabReviewComment,
   normalizePullRequestComment,
   parseStatus,
+  parseAzureDevOpsPullRequestUrl,
   parseGitHubPullRequestUrl,
   parseGitLabMergeRequestUrl,
   selectUnresolvedReviewComments,
@@ -254,14 +282,8 @@ module.exports = {
   resolvePullRequestContentRefs,
   setPullRequestFileViewed,
   submitPullRequestComment: (launchPath, request) =>
-    (isGitLabReviewSource(request.source) ? submitMergeRequestComment : submitPullRequestComment)(
-      launchPath,
-      request,
-    ),
+    getPullRequestProvider(request.source).submitComment(launchPath, request),
   submitPullRequestReview: (launchPath, request) =>
-    (isGitLabReviewSource(request.source) ? submitMergeRequestReview : submitPullRequestReview)(
-      launchPath,
-      request,
-    ),
+    getPullRequestProvider(request.source).submitReview(launchPath, request),
   validateRepositoryPath,
 };

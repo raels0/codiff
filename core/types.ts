@@ -156,6 +156,7 @@ export type ReviewSource =
     }
   | {
       author?: ReviewAuthor;
+      baseSha?: string;
       canEditDescription?: boolean;
       canEditReviewers?: boolean;
       canEditTitle?: boolean;
@@ -167,7 +168,7 @@ export type ReviewSource =
       number?: number;
       owner?: string;
       projectPath?: string;
-      provider?: 'github' | 'gitlab';
+      provider?: 'github' | 'gitlab' | 'azure-devops';
       repo?: string;
       reviewers?: ReadonlyArray<PullRequestReviewer>;
       reviewStatus?: PullRequestReviewStatus;

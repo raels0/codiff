@@ -40,7 +40,11 @@ export function usePullRequestViewedSync({
   const syncViewed = useCallback(
     (focusedFile: ChangedFile, previous: Viewed, next: Viewed) => {
       const state = stateRef.current;
-      if (state?.source.type !== 'pull-request' || state.source.provider === 'gitlab') {
+      if (
+        state?.source.type !== 'pull-request' ||
+        state.source.provider === 'gitlab' ||
+        state.source.provider === 'azure-devops'
+      ) {
         return;
       }
       // Walkthrough surfaces render a focused diff with its own fingerprint.

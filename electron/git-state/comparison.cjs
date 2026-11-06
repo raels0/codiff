@@ -1,5 +1,6 @@
 // @ts-check
 
+const { sep } = require('node:path');
 const {
   fileSort,
   getFingerprint,
@@ -226,7 +227,7 @@ const readComparisonSectionContent = async (
   sourceLabel,
   options = {},
 ) => {
-  const path = validateRepositoryPath(requestedPath);
+  const path = validateRepositoryPath(requestedPath).split(sep).join('/');
   const item = status.find((candidate) => candidate.path === path);
   if (!item) {
     throw new Error(`File is not part of this ${sourceLabel}.`);
@@ -268,7 +269,7 @@ const readComparisonImageContent = async (
   sourceLabel,
 ) => {
   try {
-    const path = validateRepositoryPath(requestedPath);
+    const path = validateRepositoryPath(requestedPath).split(sep).join('/');
     const item = status.find((candidate) => candidate.path === path);
     if (!item) {
       throw new Error(`File is not part of this ${sourceLabel}.`);
