@@ -10,6 +10,7 @@ import {
   isNavigableIdentifierToken,
 } from '../lib/identifier-navigation.ts';
 import { applySearchHighlights } from '../lib/search-highlights.ts';
+import dunkelTheme from '../themes/dunkel.json' with { type: 'json' };
 
 test('finds identifiers at either edge of the clicked token', () => {
   expect(getIdentifierAtOffset('return formatGreeting(name)', 8)).toEqual({
@@ -51,7 +52,10 @@ test('applies and clears the modifier affordance inside rendered diff shadow roo
   const syntaxToken = document.createElement('span');
   syntaxToken.textContent = '  return formatGreeting(name).value;';
   const commentToken = document.createElement('span');
-  commentToken.setAttribute('style', '--diffs-token-dark:#919191');
+  commentToken.setAttribute(
+    'style',
+    `--diffs-token-dark:${dunkelTheme.style.syntax.comment.color}`,
+  );
   commentToken.textContent = ' // do not navigate these words';
   line.append(syntaxToken, commentToken);
   root.append(line);

@@ -85,28 +85,6 @@ test('electron config normalizes code font settings', () => {
     codeFontSize: 15,
   });
 
-  test('old and invalid review themes use the neutral preset', () => {
-    expect(readElectronConfig({}).settings.reviewTheme).toBe('neutral');
-    for (const reviewTheme of ['classic', null, 42]) {
-      expect(readElectronConfig({ settings: { reviewTheme } }).settings.reviewTheme).toBe(
-        'neutral',
-      );
-    }
-  });
-
-  test.each(['neutral', 'blue-amber'] as const)(
-    'review theme %s survives save and reload',
-    (reviewTheme) => {
-      using home = createTemporaryDirectorySync('codiff-review-theme.');
-      using _environment = createTemporaryEnvironment({ HOME: home.path, USERPROFILE: home.path });
-      const config = createDefaultConfig();
-      config.settings.reviewTheme = reviewTheme;
-      config.settings.theme = 'dark';
-      writeConfig(config);
-      expect(readConfig().settings).toMatchObject({ reviewTheme, theme: 'dark' });
-    },
-  );
-
   expect(
     readElectronConfig({ settings: { codeFontFamily: 42, codeFontSize: 'large' } }).settings,
   ).toMatchObject({
@@ -116,6 +94,26 @@ test('electron config normalizes code font settings', () => {
   expect(readElectronConfig({ settings: { codeFontSize: 8 } }).settings.codeFontSize).toBe(10);
   expect(readElectronConfig({ settings: { codeFontSize: 99 } }).settings.codeFontSize).toBe(32);
 });
+
+test('old and invalid review themes use the neutral preset', () => {
+  expect(readElectronConfig({}).settings.reviewTheme).toBe('neutral');
+  for (const reviewTheme of ['classic', null, 42]) {
+    expect(readElectronConfig({ settings: { reviewTheme } }).settings.reviewTheme).toBe('neutral');
+  }
+});
+
+test.each(['neutral', 'blue-amber'] as const)(
+  'review theme %s survives save and reload',
+  (reviewTheme) => {
+    using home = createTemporaryDirectorySync('codiff-review-theme.');
+    using _environment = createTemporaryEnvironment({ HOME: home.path, USERPROFILE: home.path });
+    const config = createDefaultConfig();
+    config.settings.reviewTheme = reviewTheme;
+    config.settings.theme = 'dark';
+    writeConfig(config);
+    expect(readConfig().settings).toMatchObject({ reviewTheme, theme: 'dark' });
+  },
+);
 
 test('electron config normalizes sidebar position', () => {
   expect(readElectronConfig({}).settings.sidebarPosition).toBe('left');
