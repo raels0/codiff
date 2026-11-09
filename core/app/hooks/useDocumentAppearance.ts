@@ -42,7 +42,9 @@ export function useDocumentAppearance({
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-review-theme', reviewTheme);
-    return () => root.removeAttribute('data-review-theme');
+    return () => {
+      root.removeAttribute('data-review-theme');
+    };
   }, [reviewTheme]);
 
   useEffect(() => {
