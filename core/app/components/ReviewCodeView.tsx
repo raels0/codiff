@@ -3633,8 +3633,10 @@ export function ReviewCodeView({
           ...codeViewLayout,
           paddingBottom: bottomInset,
         },
+        lineDiffType: workerHighlighterOptions.lineDiffType,
         lineHoverHighlight: 'both',
         loadDiffFiles,
+        maxLineDiffLength: workerHighlighterOptions.maxLineDiffLength,
         onGutterUtilityClick: (range, context) => {
           if (isReadOnly || context.item.edit) {
             return;

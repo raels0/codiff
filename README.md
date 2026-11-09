@@ -141,8 +141,9 @@ The command palette includes actions for common review workflows:
 ## Review Themes
 
 Both review presets keep code and line-number backgrounds neutral, including entirely new or
-deleted files. Gutter bars and file status show additions and deletions; a subtle tint and
-underline emphasize changed words without replacing syntax colors.
+deleted files. Gutter bars and file status show additions and deletions. Small in-place edits
+receive precise word highlights with a faint tint, thin rounded outline, and underline,
+without replacing syntax colors or highlighting unchanged punctuation between edited words.
 Syntax colors are contrast-tuned for both presets in light and dark appearance.
 
 Open **Commands**, search for **review theme**, and choose **Neutral Review** (the default,

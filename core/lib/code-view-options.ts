@@ -38,6 +38,7 @@ export const diffContextExpansionLineCount = 100;
 export const diffCollapsedContextThreshold = 12;
 
 export const workerHighlighterOptions = {
+  lineDiffType: 'word' as const,
   maxLineDiffLength: 2000,
   preferredHighlighter: 'highlights' as const,
   theme: {
@@ -106,12 +107,20 @@ export const codeViewUnsafeCSS = `
     --diffs-bg-selection-number-override: rgb(61 135 245 / 0.46);
   }
 
+  :is([data-line-type="change-addition"], [data-line-type="change-deletion"]) [data-diff-span] {
+    border-radius: 2px;
+    box-decoration-break: clone;
+    outline: 1px solid transparent;
+  }
+
   [data-line-type="change-addition"] [data-diff-span] {
     box-shadow: inset 0 -1px var(--diffs-addition-base);
+    outline-color: color-mix(in srgb, var(--diffs-addition-base) 55%, transparent);
   }
 
   [data-line-type="change-deletion"] [data-diff-span] {
     box-shadow: inset 0 -1px var(--diffs-deletion-base);
+    outline-color: color-mix(in srgb, var(--diffs-deletion-base) 55%, transparent);
   }
 
   [data-diff-type="split"][data-overflow="scroll"] {
