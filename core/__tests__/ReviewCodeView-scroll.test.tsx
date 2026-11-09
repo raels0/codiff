@@ -2353,16 +2353,16 @@ test('Ask follow-ups support Send and Ctrl+Enter without sending plain Enter or 
   const onAskCodex = vi.fn();
   const comment: ReviewComment = {
     body: 'Explain this change.',
-    filePath: file.path,
-    id: 'comment-1',
-    lineNumber: 1,
-    sectionId: 'src/comment.ts:unstaged',
-    side: 'additions',
     codexReply: {
       body: 'First answer',
       status: 'ready',
       turns: [{ question: 'Explain this change.', reply: 'First answer' }],
     },
+    filePath: file.path,
+    id: 'comment-1',
+    lineNumber: 1,
+    sectionId: 'src/comment.ts:unstaged',
+    side: 'additions',
   };
   await using view = await renderReact(
     <ReviewCodeViewHarness comments={[comment]} files={[file]} onAskCodex={onAskCodex} />,
