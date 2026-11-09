@@ -35,7 +35,7 @@ export type KeyComboBinding = KeyCombo | ReadonlyArray<KeyCombo>;
 export type CodiffKeymap = {
   askAgent: KeyCombo;
   closeSearch: KeyCombo;
-  commandBar: KeyCombo;
+  commandBar: KeyComboBinding;
   diffSearch: KeyCombo;
   discardComment: KeyCombo;
   doneEditing: KeyCombo;

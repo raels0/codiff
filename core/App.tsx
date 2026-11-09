@@ -1,6 +1,7 @@
 import { ArrowClockwiseIcon as ArrowClockwise } from '@phosphor-icons/react/ArrowClockwise';
 import { ArrowSquareOutIcon as ArrowSquareOut } from '@phosphor-icons/react/ArrowSquareOut';
 import { ClockCounterClockwiseIcon as ClockCounterClockwise } from '@phosphor-icons/react/ClockCounterClockwise';
+import { MagnifyingGlassIcon as MagnifyingGlass } from '@phosphor-icons/react/MagnifyingGlass';
 import { PathIcon as Path } from '@phosphor-icons/react/Path';
 import { TreeStructureIcon as TreeStructure } from '@phosphor-icons/react/TreeStructure';
 import type { FileDiffLoadedFiles } from '@pierre/diffs';
@@ -1329,17 +1330,18 @@ export default function App({
     () => sidebarModeRef.current === 'walkthrough' && narrativeWalkthroughRef.current != null,
     [narrativeWalkthroughRef, sidebarModeRef],
   );
-  const { closeCommandBar, commandBarVisible, shortcutsHelpVisible } = useAppKeyboardShortcuts({
-    keymap: codiffConfig.keymap,
-    navigateHunks,
-    onFocusFileFilter: focusFileFilter,
-    onOpenDiffSearch: openDiffSearch,
-    onOpenSelectedFile: openSelectedFile,
-    onToggleSidebar: toggleSidebar,
-    onToggleWordWrap: toggleWordWrap,
-    shouldDeferHunkNavigation,
-    sidebarCollapsed,
-  });
+  const { closeCommandBar, commandBarVisible, openCommandBar, shortcutsHelpVisible } =
+    useAppKeyboardShortcuts({
+      keymap: codiffConfig.keymap,
+      navigateHunks,
+      onFocusFileFilter: focusFileFilter,
+      onOpenDiffSearch: openDiffSearch,
+      onOpenSelectedFile: openSelectedFile,
+      onToggleSidebar: toggleSidebar,
+      onToggleWordWrap: toggleWordWrap,
+      shouldDeferHunkNavigation,
+      sidebarCollapsed,
+    });
 
   useEffect(() => window.codiff.onFindInDiffs(openDiffSearch), [openDiffSearch]);
 
@@ -1990,11 +1992,21 @@ export default function App({
       <ReviewTopBar
         actions={
           <>
+            <button
+              aria-label="Open command palette"
+              className="review-top-bar-icon-button review-top-bar-text-button"
+              onClick={openCommandBar}
+              title={`Command palette (${getShortcutLabel(codiffConfig.keymap, 'commandBar')})`}
+              type="button"
+            >
+              <MagnifyingGlass aria-hidden size={16} weight="bold" />
+              Commands
+            </button>
             {pullRequestUrl ? (
               <button
                 aria-busy={refreshing}
                 aria-label="Refresh pull request"
-                className="review-top-bar-icon-button review-top-bar-refresh"
+                className="review-top-bar-icon-button review-top-bar-text-button"
                 disabled={refreshing || isSwitchingSource}
                 onClick={refreshRepository}
                 title="Refresh pull request from remote"

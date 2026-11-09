@@ -998,14 +998,14 @@ a.review-top-bar-source:focus-visible {
   color: var(--sidebar-text);
 }
 
-.review-top-bar-refresh {
+.review-top-bar-text-button {
   font: 600 11px/1.35 var(--font-sans);
   gap: 5px;
   padding: 0 6px;
   width: auto;
 }
 
-.review-top-bar-refresh:disabled {
+.review-top-bar-text-button:disabled {
   background: transparent;
   cursor: default;
   opacity: 0.5;

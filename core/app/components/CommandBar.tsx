@@ -102,8 +102,9 @@ export function CommandBar({
 
   return (
     <div className="command-bar-overlay" onClick={handleOverlayClick}>
-      <div className="command-bar">
+      <div aria-label="Command palette" className="command-bar" role="dialog">
         <input
+          aria-label="Search commands"
           autoFocus
           className="command-bar-input"
           onChange={(event) => handleQueryChange(event.currentTarget.value)}

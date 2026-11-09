@@ -140,9 +140,9 @@
       "additionalProperties": false,
       "properties": {
         "commandBar": {
-          "type": "string",
-          "default": "Mod+k",
-          "description": "Open the command palette."
+          "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }],
+          "default": ["Mod+Shift+p", "Mod+k"],
+          "description": "Open the command palette. Accepts a single combo or a list of aliases."
         },
         "editFile": {
           "type": "string",

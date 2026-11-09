@@ -113,15 +113,19 @@ codiff --completions zsh > ~/.zsh/completions/_codiff
 
 Launching Codiff in multiple repositories opens a separate native window for each repository.
 
-## Command Bar
+## Command Palette
 
-Open the command bar with <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on macOS, or
-<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on other platforms. Type to filter commands, use
+Click **Commands** in the top toolbar, or open the palette with
+<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on macOS, or
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on other platforms.
+<kbd>Cmd</kbd>/<kbd>Ctrl</kbd>+<kbd>K</kbd> also works. Type to filter commands, use
 <kbd>Up</kbd>/<kbd>Down</kbd> to move through results, press <kbd>Enter</kbd> to run the selected
 command, and press <kbd>Esc</kbd> to close it.
 
-The command bar includes actions for common review workflows:
+The command palette includes actions for common review workflows:
 
+- Increase, Decrease, and Reset Code Font Size
+- Open PR, Branch, Commit, or Folder
 - Focus File Filter
 - Find in Diffs
 - Show File Tree, Show History, and Show Walkthrough
@@ -131,7 +135,7 @@ The command bar includes actions for common review workflows:
 - Toggle Diff Layout, with the target layout action shown as the hint
 - Open the currently selected file in your editor
 - Toggle Sidebar
-- Reload Window
+- Refresh Changes, including remote PR state
 
 ## Configuration
 
@@ -165,7 +169,7 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
     "wordWrap": false,
   },
   "keymap": {
-    "commandBar": "Mod+k",
+    "commandBar": ["Mod+Shift+p", "Mod+k"],
     "diffSearch": "Mod+f",
     "fileFilter": "Mod+p",
     "nextSearchMatch": "Enter",

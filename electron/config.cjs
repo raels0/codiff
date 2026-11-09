@@ -228,10 +228,7 @@ const mergeConfig = (raw) => {
         typeof rawKeymap.closeSearch === 'string'
           ? rawKeymap.closeSearch
           : defaults.keymap.closeSearch,
-      commandBar:
-        typeof rawKeymap.commandBar === 'string'
-          ? rawKeymap.commandBar
-          : defaults.keymap.commandBar,
+      commandBar: normalizeKeyComboBinding(rawKeymap.commandBar, defaults.keymap.commandBar),
       diffSearch:
         typeof rawKeymap.diffSearch === 'string'
           ? rawKeymap.diffSearch

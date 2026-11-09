@@ -58,6 +58,17 @@ test('electron and renderer defaults match', () => {
   expect(createElectronDefaultConfig()).toEqual(createDefaultConfig());
 });
 
+test('command palette bindings accept aliases and retain custom single shortcuts', () => {
+  const aliases = ['Mod+Shift+p', 'Mod+k'];
+  expect(readElectronConfig({ keymap: { commandBar: aliases } }).keymap.commandBar).toEqual(
+    aliases,
+  );
+  expect(readElectronConfig({ keymap: { commandBar: 'Alt+c' } }).keymap.commandBar).toBe('Alt+c');
+  expect(readElectronConfig({ keymap: { commandBar: ['Mod+p', 42] } }).keymap.commandBar).toEqual(
+    createDefaultConfig().keymap.commandBar,
+  );
+});
+
 test('electron config normalizes code font settings', () => {
   expect(readElectronConfig({}).settings.codeFontFamily).toBe('');
   expect(readElectronConfig({}).settings.codeFontSize).toBe(13);

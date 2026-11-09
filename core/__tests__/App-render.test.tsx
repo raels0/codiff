@@ -1516,12 +1516,15 @@ test('before unload saves the current source and selected file for any reload tr
   expect(getReloadSelectionPath(selection, nextState)).toBe(changedFile.path);
 });
 
-test('Mod+K opens the command bar', async () => {
+test.each([
+  { key: 'P', shift: true },
+  { key: 'k', shift: false },
+])('Mod+$key (shift=$shift) opens the command palette', async ({ key, shift }) => {
   const changedFile = createChangedFile('src/app.ts');
   await using app = await renderAppForOpenFileShortcut(changedFile);
 
   await act(async () => {
-    dispatchModifiedKey('k');
+    dispatchModifiedKey(key, shift);
   });
 
   expect(app.container.querySelector('.command-bar-input')).not.toBeNull();
@@ -1529,6 +1532,30 @@ test('Mod+K opens the command bar', async () => {
     true,
   );
   expect(app.openFile).not.toHaveBeenCalled();
+});
+
+test.each([
+  { method: 'increaseCodeFontSize', title: 'Increase Code Font Size' },
+  { method: 'decreaseCodeFontSize', title: 'Decrease Code Font Size' },
+  { method: 'resetCodeFontSize', title: 'Reset Code Font Size' },
+] as const)('Commands button exposes and runs $title', async ({ method, title }) => {
+  const changedFile = createChangedFile('src/app.ts');
+  await using app = await renderAppForOpenFileShortcut(changedFile);
+  const openPalette = app.container.querySelector<HTMLButtonElement>(
+    '[aria-label="Open command palette"]',
+  )!;
+  await act(async () => openPalette.click());
+  const search = app.container.querySelector<HTMLInputElement>('[aria-label="Search commands"]')!;
+  expect(document.activeElement).toBe(search);
+  await act(async () => setInputValue(search, title));
+  const commands = app.container.querySelectorAll<HTMLButtonElement>('.command-bar-item');
+  expect(commands).toHaveLength(1);
+  expect(commands[0]!.textContent).toContain(title);
+  await act(async () =>
+    search.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+  );
+  expect(window.codiff[method]).toHaveBeenCalledOnce();
+  expect(app.container.querySelector('[aria-label="Command palette"]')).toBeNull();
 });
 
 test('Mod+Shift+O opens the selected file in the editor', async () => {
