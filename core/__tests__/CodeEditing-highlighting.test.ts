@@ -101,7 +101,7 @@ const renderInlineWords = async (before: string | null, after: string | null) =>
   document.body.append(container);
   const renderer = new FileDiff({
     ...workerHighlighterOptions,
-    theme: 'Dunkel',
+    theme: 'github-dark',
     themeType: 'dark',
     unsafeCSS: codeViewUnsafeCSS,
   });
