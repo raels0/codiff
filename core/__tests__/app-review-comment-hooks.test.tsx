@@ -6,7 +6,7 @@ import { act, useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { useAppReviewComments } from '../app/hooks/useAppReviewComments.ts';
 import type { ReviewComment } from '../lib/app-types.ts';
-import type { RepositoryState } from '../types.ts';
+import type { RepositoryState, ReviewAssistantResult } from '../types.ts';
 import { renderReact, waitFor } from './helpers/react.tsx';
 
 type AppReviewComments = ReturnType<typeof useAppReviewComments>;
@@ -50,6 +50,7 @@ function AppReviewCommentsHarness({
   state: RepositoryState;
 }) {
   const stateRef = useRef<RepositoryState | null>(state);
+  stateRef.current = state;
   const comments = useAppReviewComments({
     isReviewActionDisabled: () => false,
     onCommentFileChange,
@@ -68,16 +69,19 @@ const renderAppReviewComments = async (state: RepositoryState) => {
     }
     return stateRef.current;
   };
+  const render = (nextState: RepositoryState) => (
+    <AppReviewCommentsHarness
+      onCommentFileChange={onCommentFileChange}
+      onState={(comments) => (stateRef.current = comments)}
+      state={nextState}
+    />
+  );
+  const view = await renderReact(render(state));
   return {
-    ...(await renderReact(
-      <AppReviewCommentsHarness
-        onCommentFileChange={onCommentFileChange}
-        onState={(comments) => (stateRef.current = comments)}
-        state={state}
-      />,
-    )),
+    ...view,
     getState,
     onCommentFileChange,
+    rerenderState: (nextState: RepositoryState) => view.rerender(render(nextState)),
   };
 };
 
@@ -86,7 +90,15 @@ afterEach(() => {
 });
 
 test('app review comments request and store assistant replies', async () => {
+  const context = {
+    fileCount: 8,
+    filesRead: 8,
+    label: 'PR context',
+    version: 'before → after',
+    warnings: [],
+  };
   const askReviewAssistant = vi.fn(async () => ({
+    context,
     reply: 'Use the shared parser.',
     status: 'ready' as const,
   }));
@@ -113,11 +125,69 @@ test('app review comments request and store assistant replies', async () => {
   await waitFor(() => {
     expect(getState().reviewComments[0]?.codexReply).toEqual({
       body: 'Use the shared parser.',
+      context,
       status: 'ready',
     });
   });
   expect(onCommentFileChange).toHaveBeenCalledTimes(2);
 });
+
+test.each(['commits', 'question', 'review', 'hydration'])(
+  'assistant replies respect in-flight %s changes and prevent duplicate requests',
+  async (change) => {
+    const pending = Promise.withResolvers<ReviewAssistantResult>();
+    const askReviewAssistant = vi.fn(() => pending.promise);
+    window.codiff = { askReviewAssistant } as unknown as Window['codiff'];
+    const initial: RepositoryState = {
+      ...pullRequestState,
+      source: { ...pullRequestState.source, baseSha: 'before', headSha: 'after' },
+    };
+    await using view = await renderAppReviewComments(initial);
+    await act(async () => view.getState().setReviewComments([comment]));
+    await act(async () => {
+      view.getState().askCodex(comment.id);
+      view.getState().askCodex(comment.id);
+    });
+    expect(askReviewAssistant).toHaveBeenCalledTimes(1);
+    if (change === 'question') {
+      await act(async () => view.getState().updateComment(comment.id, 'A different question'));
+    } else {
+      await view.rerenderState({
+        ...initial,
+        ...(change === 'hydration'
+          ? {
+              files: [
+                {
+                  fingerprint: 'loaded',
+                  oldPath: undefined,
+                  path: 'src/app.ts',
+                  sections: [],
+                  status: 'modified',
+                },
+              ],
+            }
+          : {}),
+        source: {
+          ...initial.source,
+          ...(change === 'commits' ? { headSha: 'new-after' } : {}),
+          ...(change === 'review'
+            ? { number: 43, url: 'https://github.com/nkzw-tech/codiff/pull/43' }
+            : {}),
+        },
+      });
+    }
+    await act(async () => pending.resolve({ reply: 'Previous answer', status: 'ready' }));
+    const reply = view.getState().reviewComments[0]?.codexReply;
+    if (change === 'hydration') {
+      expect(reply).toMatchObject({ body: 'Previous answer', status: 'ready' });
+    } else if (change === 'review') {
+      expect(reply?.body).toBeUndefined();
+    } else {
+      expect(reply).toMatchObject({ error: expect.stringContaining('Ask again'), status: 'error' });
+      expect(reply?.body).toBeUndefined();
+    }
+  },
+);
 
 test('app review comments submit a draft and replace it with the remote comment', async () => {
   const submitPullRequestComment = vi.fn(async () => ({

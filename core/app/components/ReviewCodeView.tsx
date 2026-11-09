@@ -1908,13 +1908,33 @@ function ReviewCommentEditor({
             <div className="review-comment-header codex">
               <strong>{agentLabel}</strong>
             </div>
+            {comment.codexReply.context ? (
+              <details className="review-comment-assistant-context">
+                <summary>
+                  {comment.codexReply.context.label} · {comment.codexReply.context.fileCount}{' '}
+                  changed files
+                  {comment.codexReply.context.warnings.length ? ' · Limited context' : ''}
+                </summary>
+                <div>
+                  Changes from {comment.codexReply.context.filesRead} files were provided.
+                  {comment.codexReply.context.version
+                    ? ` Saved version: ${comment.codexReply.context.version}.`
+                    : ''}
+                </div>
+                {comment.codexReply.context.warnings.map((warning) => (
+                  <div key={warning}>{warning}</div>
+                ))}
+              </details>
+            ) : null}
             <div
               className={`review-comment-codex-reply${
                 comment.codexReply.status === 'loading' ? ' is-loading' : ''
               }${comment.codexReply.status === 'error' ? ' error' : ''}`}
             >
               {comment.codexReply.status === 'loading' ? (
-                <span className="review-comment-codex-loading">Waiting for {agentLabel}…</span>
+                <span className="review-comment-codex-loading">
+                  Reading review context with {agentLabel}…
+                </span>
               ) : (
                 <ReadOnlyMarkdown
                   ariaLabel={`${agentLabel} reply`}

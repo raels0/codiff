@@ -2373,6 +2373,13 @@ test('a Codex reply does not repeatedly invalidate the diff item layout', async 
           ...comment,
           codexReply: {
             body: 'This reply is tall enough to use a different markdown measurement.',
+            context: {
+              fileCount: 42,
+              filesRead: 39,
+              label: 'PR context',
+              version: 'abc1234 → def5678',
+              warnings: ['Some requested file contents are shortened.'],
+            },
             status: 'ready',
           },
         },
@@ -2381,6 +2388,11 @@ test('a Codex reply does not repeatedly invalidate the diff item layout', async 
     />,
   );
   expect(view.container.querySelector('[aria-label="Codex reply"]')).not.toBeNull();
+  const context = view.container.querySelector('.review-comment-assistant-context');
+  expect(context?.querySelector('summary')?.textContent).toContain('PR context · 42 changed files');
+  expect(context?.textContent).toContain('Limited context');
+  expect(context?.textContent).toContain('abc1234 → def5678');
+  expect(context?.textContent).toContain('Some requested file contents are shortened.');
   expect(codeViewMock.renderCount).toBe(renderCountBeforeReply + 1);
 });
 

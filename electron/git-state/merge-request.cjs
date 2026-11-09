@@ -467,7 +467,10 @@ const readMergeRequestState = async (launchPath, source) => {
     launchPath,
     reviewComments,
     root: repoRoot,
-    source: createMergeRequestSource(mergeRequest, metadata),
+    source: {
+      ...createMergeRequestSource(mergeRequest, metadata),
+      ...(refs ? { baseSha: refs.base } : {}),
+    },
   };
 };
 

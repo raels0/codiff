@@ -151,6 +151,22 @@ green/red markers) or **Blue/Amber**. The selection is saved as `settings.review
 (`"neutral"` or `"blue-amber"`) and applies immediately without reloading the PR.
 Light/dark appearance remains controlled separately by `settings.theme`.
 
+## Ask About a Review
+
+**Ask** uses your selection as a starting point, not a boundary. It receives the
+changed-file list and changes across the review. For pull requests, it can read
+related files from the exact before/after commits without using your checkout.
+Large reviews are read in smaller pieces, with additional file and text lookups
+when needed.
+
+Each answer includes an expandable context summary with the saved version and any
+missing or shortened material. If the review or question changes while an answer
+is being prepared, ask again rather than relying on an outdated answer.
+
+The shared instructions are written in plain English in
+[`electron/prompts/review-assistant.md`](electron/prompts/review-assistant.md).
+They ask for direct answers and file/line references, not just rewritten comments.
+
 ## Configuration
 
 Codiff reads configuration from `~/.codiff/codiff.jsonc`. Open `Codiff > Open Config File...` to

@@ -982,7 +982,10 @@ const readPullRequestState = async (launchPath, source) => {
     launchPath,
     reviewComments,
     root: repoRoot,
-    source: createPullRequestSource(pullRequest, metadata),
+    source: {
+      ...createPullRequestSource(pullRequest, metadata),
+      ...(contentRefs ? { baseSha: contentRefs.base } : {}),
+    },
     ...(viewedFiles && viewedFiles.headSha === metadata.head?.sha
       ? {
           viewedFiles: Object.fromEntries(

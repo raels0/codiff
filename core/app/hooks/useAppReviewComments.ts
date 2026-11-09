@@ -1,10 +1,11 @@
-import { useCallback, useState, type RefObject } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
 import type { ReviewComment } from '../../lib/app-types.ts';
 import {
   getPendingPullRequestReviewComments,
   getReviewCommentRangeProps,
   toPullRequestReviewComment,
 } from '../../lib/review-comments.ts';
+import { getSourceKey } from '../../lib/source.ts';
 import type {
   PullRequestReviewEvent,
   PullRequestReviewStatus,
@@ -22,12 +23,18 @@ type UseAppReviewCommentsOptions = {
   stateRef: RefObject<RepositoryState | null>;
 };
 
+const getReviewVersion = (state: RepositoryState) =>
+  state.source.type === 'pull-request'
+    ? `${state.source.baseSha || ''}:${state.source.headSha || ''}`
+    : state.files.map((file) => `${file.path}:${file.fingerprint}`).join('\n');
+
 export function useAppReviewComments({
   isReviewActionDisabled,
   onCommentFileChange,
   stateRef,
 }: UseAppReviewCommentsOptions) {
   const [reviewComments, setReviewComments] = useState<ReadonlyArray<ReviewComment>>([]);
+  const pendingAnswers = useRef(new Set<string>());
   const [pullRequestReviewSubmitting, setPullRequestReviewSubmitting] =
     useState<PullRequestReviewEvent | null>(null);
   const commentDrafts = useReviewCommentDrafts({
@@ -87,6 +94,7 @@ export function useAppReviewComments({
       if (
         !currentState ||
         !comment ||
+        pendingAnswers.current.has(commentId) ||
         comment.body.trim().length === 0 ||
         comment.codexReply?.status === 'loading'
       ) {
@@ -95,6 +103,7 @@ export function useAppReviewComments({
 
       const request: ReviewAssistantRequest = {
         comment: {
+          ...(comment.anchor ? { anchor: comment.anchor } : {}),
           body: comment.body,
           filePath: comment.filePath,
           ...(comment.lineNumber != null ? { lineNumber: comment.lineNumber } : {}),
@@ -105,29 +114,67 @@ export function useAppReviewComments({
         source: currentState.source,
       };
 
+      const reviewKey = `${currentState.root}:${getSourceKey(currentState.source)}`;
+      const reviewVersion = getReviewVersion(currentState);
+      const acceptReply = () => {
+        const latestState = stateRef.current;
+        const latestComment = reviewCommentsRef.current.find(
+          (candidate) => candidate.id === commentId,
+        );
+        if (
+          !latestState ||
+          !latestComment ||
+          `${latestState.root}:${getSourceKey(latestState.source)}` !== reviewKey
+        ) {
+          return false;
+        }
+        if (
+          getReviewVersion(latestState) !== reviewVersion ||
+          latestComment.body !== comment.body ||
+          latestComment.filePath !== comment.filePath ||
+          latestComment.sectionId !== comment.sectionId ||
+          latestComment.lineNumber !== comment.lineNumber ||
+          latestComment.side !== comment.side ||
+          latestComment.startLineNumber !== comment.startLineNumber ||
+          latestComment.startSide !== comment.startSide
+        ) {
+          updateCodexReply(commentId, comment.filePath, {
+            error:
+              'The review or question changed while the answer was being prepared. Ask again for the current version.',
+            status: 'error',
+          });
+          return false;
+        }
+        return true;
+      };
+      pendingAnswers.current.add(commentId);
       updateCodexReply(comment.id, comment.filePath, { status: 'loading' });
       void window.codiff
         .askReviewAssistant(request)
         .then((result) => {
+          if (!acceptReply()) return;
           updateCodexReply(
             comment.id,
             comment.filePath,
             result.status === 'ready'
               ? {
                   body: result.reply,
+                  ...(result.context ? { context: result.context } : {}),
                   status: 'ready',
                 }
               : {
                   error: result.reason,
+                  ...(result.context ? { context: result.context } : {}),
                   status: 'error',
                 },
           );
         })
         .catch((error: unknown) => {
+          if (!acceptReply()) return;
           updateCodexReply(comment.id, comment.filePath, {
             error: error instanceof Error ? error.message : String(error),
             status: 'error',
-          });
+          }).finally(() => pendingAnswers.current.delete(commentId));
         });
     },
     [reviewCommentsRef, stateRef, updateCodexReply],

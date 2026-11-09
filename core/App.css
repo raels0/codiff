@@ -4137,6 +4137,22 @@ diffs-container .review-comment-thread {
   padding: 8px 10px;
 }
 
+.review-comment-assistant-context {
+  border-bottom: 1px solid var(--file-border);
+  color: var(--text);
+  font: 12px/1.5 var(--font-sans);
+  overflow-wrap: anywhere;
+  padding: 8px 12px;
+}
+
+.review-comment-assistant-context summary {
+  cursor: pointer;
+}
+
+.review-comment-assistant-context div {
+  margin-top: 6px;
+}
+
 .review-comment-codex-reply {
   color: var(--text);
   font: 13px/1.5 var(--font-sans);

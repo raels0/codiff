@@ -715,13 +715,23 @@ export type ReviewAssistantRequest = {
   };
 };
 
+export type ReviewAssistantContext = {
+  fileCount: number;
+  filesRead: number;
+  label: string;
+  version?: string;
+  warnings: ReadonlyArray<string>;
+};
+
 export type ReviewAssistantResult =
   | {
+      context?: ReviewAssistantContext;
       reply: string;
       status: 'ready';
     }
   | {
       code?: 'CODEX_NOT_FOUND' | 'CLAUDE_NOT_FOUND' | 'OPENCODE_NOT_FOUND' | 'PI_NOT_FOUND';
+      context?: ReviewAssistantContext;
       reason: string;
       status: 'unavailable';
     };
