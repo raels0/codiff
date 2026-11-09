@@ -22,7 +22,7 @@ const { join } = require('node:path');
 const defaultConfigTemplate = require('../config/defaults.json');
 
 const SCHEMA_URL =
-  'https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json';
+  'https://raw.githubusercontent.com/raels0/codiff/feat/azure-devops-prs/core/config/codiff-config.schema.json';
 const CODE_FONT_SIZE_DEFAULT = 13;
 const CODE_FONT_SIZE_MAX = 32;
 const CODE_FONT_SIZE_MIN = 10;
