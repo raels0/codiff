@@ -133,6 +133,13 @@
     color-scheme: dark;
   }
 
+  :root[data-review-theme='blue-amber'],
+  :root[data-review-theme='blue-amber'] .app-shell,
+  :root[data-review-theme='blue-amber'] .plan-shell {
+    --diff-addition: light-dark(#1d5eaa, #75b8ff);
+    --diff-deletion: light-dark(#945200, #e9b86b);
+  }
+
   *,
   *::before,
   *::after {

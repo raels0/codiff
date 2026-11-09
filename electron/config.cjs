@@ -321,6 +321,7 @@ const mergeConfig = (raw) => {
         typeof rawSettings.reviewCommentsPrefix === 'string'
           ? rawSettings.reviewCommentsPrefix
           : defaults.settings.reviewCommentsPrefix,
+      reviewTheme: rawSettings.reviewTheme === 'blue-amber' ? 'blue-amber' : 'neutral',
       sidebarPosition: normalizeSidebarPosition(rawSettings.sidebarPosition),
       showOutdated:
         typeof rawSettings.showOutdated === 'boolean'

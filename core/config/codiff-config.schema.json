@@ -106,6 +106,12 @@
           "default": "left",
           "description": "Side of the desktop window where the file sidebar appears."
         },
+        "reviewTheme": {
+          "type": "string",
+          "enum": ["neutral", "blue-amber"],
+          "default": "neutral",
+          "description": "Diff colors, independent of light/dark appearance. Both presets keep code backgrounds neutral and emphasize changed words. 'neutral' uses green/red markers; 'blue-amber' uses blue/amber markers."
+        },
         "showOutdated": {
           "type": "boolean",
           "default": false,

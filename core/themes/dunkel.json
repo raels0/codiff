@@ -18,16 +18,16 @@
     "editor.active_line_number": "#c8c8c8",
     "syntax": {
       "attribute": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "boolean": {
         "color": "#7b8cfd"
       },
       "comment": {
-        "color": "#919191"
+        "color": "#939393"
       },
       "comment.doc": {
-        "color": "#bc670f"
+        "color": "#c9843c"
       },
       "constant.builtin": {
         "color": "#7b8cfd"
@@ -56,7 +56,7 @@
         "color": "#7b8cfd"
       },
       "keyword": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "keyword.declaration": {
         "color": "#eb9a3d"
@@ -77,10 +77,10 @@
         "color": "#f06efb"
       },
       "number": {
-        "color": "#db584d"
+        "color": "#e17268"
       },
       "operator": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "property.json_key": {
         "color": "#52ce81"
@@ -92,22 +92,22 @@
         "color": "#4f9fcf"
       },
       "punctuation.delimiter.jsx": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "punctuation.special": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "selector": {
-        "color": "#3a77bf"
+        "color": "#6796ce"
       },
       "selector.class": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "selector.id": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "selector.pseudo": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "string": {
         "color": "#52ce81"
@@ -117,17 +117,17 @@
         "font_weight": 700
       },
       "string.regex": {
-        "color": "#699d36"
+        "color": "#6fa13e"
       },
       "string.special": {
-        "color": "#43a202"
+        "color": "#4da70f"
       },
       "string.special.symbol": {
-        "color": "#db584d",
+        "color": "#e17268",
         "font_weight": 700
       },
       "tag": {
-        "color": "#6a93cf"
+        "color": "#6c94d0"
       },
       "tag.component.jsx": {
         "color": "#f06efb"

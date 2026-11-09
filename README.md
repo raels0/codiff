@@ -125,6 +125,7 @@ command, and press <kbd>Esc</kbd> to close it.
 The command palette includes actions for common review workflows:
 
 - Increase, Decrease, and Reset Code Font Size
+- Review Theme: Neutral Review or Blue/Amber
 - Open PR, Branch, Commit, or Folder
 - Focus File Filter
 - Find in Diffs
@@ -136,6 +137,18 @@ The command palette includes actions for common review workflows:
 - Open the currently selected file in your editor
 - Toggle Sidebar
 - Refresh Changes, including remote PR state
+
+## Review Themes
+
+Both review presets keep code and line-number backgrounds neutral, including entirely new or
+deleted files. Gutter bars and file status show additions and deletions; a subtle tint and
+underline emphasize changed words without replacing syntax colors.
+Syntax colors are contrast-tuned for both presets in light and dark appearance.
+
+Open **Commands**, search for **review theme**, and choose **Neutral Review** (the default,
+green/red markers) or **Blue/Amber**. The selection is saved as `settings.reviewTheme`
+(`"neutral"` or `"blue-amber"`) and applies immediately without reloading the PR.
+Light/dark appearance remains controlled separately by `settings.theme`.
 
 ## Configuration
 
@@ -163,6 +176,7 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
     "openAIReasoningEffort": "",
     "opencodeModel": "opencode-default",
     "sidebarPosition": "left",
+    "reviewTheme": "neutral",
     "showWhitespace": false,
     "theme": "system",
     "walkthroughPrompt": "",

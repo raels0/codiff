@@ -16,6 +16,7 @@
     "piModel": "pi-default",
     "renderMarkdownAs": "preview",
     "reviewCommentsPrefix": "# Address these Review Comments",
+    "reviewTheme": "neutral",
     "sidebarPosition": "left",
     "showOutdated": false,
     "showWhitespace": false,

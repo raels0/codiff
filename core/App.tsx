@@ -211,6 +211,7 @@ export default function App({
   const [localChangesDetected, setLocalChangesDetected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [reviewThemeError, setReviewThemeError] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<CodiffUpdateStatus | null>(null);
   const [launchOptions, setLaunchOptions] = useState<CodiffLaunchOptions>(
     initialLaunchOptions ?? defaultLaunchOptions,
@@ -1201,6 +1202,7 @@ export default function App({
     clearEmptyCodeFontFamily: true,
     codeFontFamily: preferences.codeFontFamily,
     codeFontSize: preferences.codeFontSize,
+    reviewTheme: preferences.reviewTheme,
     theme: preferences.theme,
   });
 
@@ -1677,6 +1679,13 @@ export default function App({
     [showOpenReviewSourceDialog],
   );
 
+  const changeReviewTheme = useCallback((reviewTheme: CodiffPreferences['reviewTheme']) => {
+    setReviewThemeError(null);
+    void window.codiff.setReviewTheme(reviewTheme).catch((error: unknown) => {
+      setReviewThemeError(getRepositoryLoadError(error).message);
+    });
+  }, []);
+
   const commandBarCommands = useAppCommands({
     changeSidebarMode,
     focusFileFilter,
@@ -1685,6 +1694,7 @@ export default function App({
     onOpenReviewSource: showOpenReviewSourceDialog,
     onOpenSelectedFile: openSelectedFile,
     onRefreshRepository: refreshRepository,
+    onSetReviewTheme: changeReviewTheme,
     onToggleSidebar: toggleSidebar,
     onToggleViewed: toggleViewed,
     onToggleWordWrap: toggleWordWrap,
@@ -2074,6 +2084,16 @@ export default function App({
           'toggleSidebar',
         )})`}
       />
+      {reviewThemeError ? (
+        <div className="repository-change-banner error visible" role="alert">
+          <span className="repository-change-banner-content">
+            Review theme change failed: {reviewThemeError}
+          </span>
+          <button onClick={() => setReviewThemeError(null)} type="button">
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <RepositoryChangeBanner
         error={refreshError}
         onRefresh={refreshRepository}

@@ -1,5 +1,5 @@
 import type { MarkdownAnnotationAnchor } from '@nkzw/mdx-editor';
-import type { CodiffDiffStyle } from './config/types.ts';
+import type { CodiffDiffStyle, CodiffReviewTheme } from './config/types.ts';
 
 export type DiffSection = {
   binary: boolean;
@@ -812,6 +812,7 @@ export type CodiffPreferences = {
   piModel: string;
   renderMarkdownAs: 'preview' | 'source';
   reviewCommentsPrefix: string;
+  reviewTheme: CodiffReviewTheme;
   showOutdated: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';

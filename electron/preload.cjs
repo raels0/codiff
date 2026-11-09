@@ -171,6 +171,7 @@ const codiff = {
   openRepositoryFolder: () => ipcRenderer.invoke('codiff:openRepositoryFolder'),
   resolvePullRequestUrl: (value) => ipcRenderer.invoke('codiff:resolvePullRequestUrl', value),
   setDiffStyle: (value) => ipcRenderer.invoke('codiff:setDiffStyle', value),
+  setReviewTheme: (value) => ipcRenderer.invoke('codiff:setReviewTheme', value),
   setShowOutdated: (value) => ipcRenderer.invoke('codiff:setShowOutdated', value),
   setWordWrap: (value) => ipcRenderer.invoke('codiff:setWordWrap', value),
   sharePlan: (review) => ipcRenderer.invoke('codiff:sharePlan', review),

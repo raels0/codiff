@@ -189,6 +189,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
     piModel: defaultSettings.piModel,
     renderMarkdownAs: defaultSettings.renderMarkdownAs,
     reviewCommentsPrefix: defaultSettings.reviewCommentsPrefix,
+    reviewTheme: defaultSettings.reviewTheme,
     showOutdated: false,
     showWhitespace: false,
     sidebarPosition: defaultSettings.sidebarPosition,
@@ -265,6 +266,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   })),
   setDiffStyle: vi.fn(async () => {}),
   setPullRequestFileViewed: vi.fn(async () => {}),
+  setReviewTheme: vi.fn(async () => {}),
   setShowOutdated: vi.fn(async () => {}),
   setWordWrap: vi.fn(async () => {}),
   sharePlan: vi.fn(async () => ({
@@ -1556,6 +1558,71 @@ test.each([
   );
   expect(window.codiff[method]).toHaveBeenCalledOnce();
   expect(app.container.querySelector('[aria-label="Command palette"]')).toBeNull();
+});
+
+test.each([
+  { reviewTheme: 'neutral', title: 'Review Theme: Neutral Review' },
+  { reviewTheme: 'blue-amber', title: 'Review Theme: Blue/Amber' },
+] as const)(
+  '$title applies a saved preference without reloading the review',
+  async ({ reviewTheme, title }) => {
+    let configChanged: ((config: ReturnType<typeof createDefaultConfig>) => void) | undefined;
+    const config = createDefaultConfig();
+    config.settings.theme = 'dark';
+    window.codiff = createCodiffMock({
+      getConfig: vi.fn(async () => config),
+      onConfigChanged: vi.fn((callback) => {
+        configChanged = callback;
+        return () => {};
+      }),
+      setReviewTheme: vi.fn(async (value) => {
+        configChanged?.({ ...config, settings: { ...config.settings, reviewTheme: value } });
+      }),
+    });
+    await using view = await renderReact(<App />);
+    await waitFor(() => expect(view.container.querySelector('.loading')).toBeNull());
+    const reads = vi.mocked(window.codiff.getRepositoryState).mock.calls.length;
+    await act(async () =>
+      view.container
+        .querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')!
+        .click(),
+    );
+    const search = view.container.querySelector<HTMLInputElement>(
+      '[aria-label="Search commands"]',
+    )!;
+    await act(async () => setInputValue(search, title));
+    await act(async () =>
+      search.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+    );
+    expect(window.codiff.setReviewTheme).toHaveBeenCalledWith(reviewTheme);
+    expect(document.documentElement.getAttribute('data-review-theme')).toBe(reviewTheme);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(view.container.querySelector('[aria-label="Command palette"]')).toBeNull();
+    expect(window.codiff.getRepositoryState).toHaveBeenCalledTimes(reads);
+  },
+);
+
+test('a failed review theme save keeps the review visible and reports the error', async () => {
+  window.codiff = createCodiffMock({
+    setReviewTheme: vi.fn(async () => {
+      throw new Error('Config is read-only');
+    }),
+  });
+  await using view = await renderReact(<App />);
+  await waitFor(() => expect(view.container.querySelector('.loading')).toBeNull());
+  await act(async () =>
+    view.container.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')!.click(),
+  );
+  const search = view.container.querySelector<HTMLInputElement>('[aria-label="Search commands"]')!;
+  await act(async () => setInputValue(search, 'Review Theme: Blue/Amber'));
+  await act(async () =>
+    search.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+  );
+  expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(
+    'Review theme change failed: Config is read-only',
+  );
+  expect(document.documentElement.getAttribute('data-review-theme')).toBe('neutral');
+  expect(view.container.querySelector('.app-shell')).not.toBeNull();
 });
 
 test('Mod+Shift+O opens the selected file in the editor', async () => {
