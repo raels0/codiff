@@ -693,6 +693,12 @@ export type WalkthroughCommitMessageResult =
       status: 'unavailable';
     };
 
+export type ReviewAssistantTurn = {
+  context?: ReviewAssistantContext;
+  question: string;
+  reply: string;
+};
+
 export type ReviewAssistantRequest = {
   comment: {
     anchor?: 'file' | 'line';
@@ -704,6 +710,7 @@ export type ReviewAssistantRequest = {
     startLineNumber?: number;
     startSide?: 'additions' | 'deletions';
   };
+  previousTurns?: ReadonlyArray<ReviewAssistantTurn>;
   source?: ReviewSource;
   walkthroughNote?: {
     action: 'review' | 'scan' | 'skim';

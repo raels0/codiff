@@ -112,6 +112,56 @@ test('preserves replacement-string characters in code supplied to the readable p
   expect(prompt).not.toContain('{{REVIEW_MATERIAL}}');
 });
 
+test('carries earlier questions and answers through follow-up context reads in clear order', async () => {
+  const previousTurns = [
+    { question: 'Why is this needed?', reply: 'The caller uses shared state.' },
+    { question: 'Does that change the helper?', reply: 'The helper now checks the new limit.' },
+  ];
+  const run = vi
+    .fn<Run>()
+    .mockResolvedValueOnce(JSON.stringify(requestMore('changes', 'selected.ts')))
+    .mockResolvedValueOnce(JSON.stringify(answer));
+  const result = await readReviewAssistantReply(
+    state(),
+    {
+      ...request,
+      comment: { ...request.comment, body: 'Could your suggestion break the caller?' },
+      previousTurns,
+    },
+    agent(run),
+    {},
+  );
+  expect(result.status).toBe('ready');
+  expect(run).toHaveBeenCalledTimes(2);
+  for (const call of run.mock.calls) {
+    const prompt = call[1];
+    expect(prompt).toContain('# Reviewer’s question\n\nCould your suggestion break the caller?');
+    expect(prompt).toContain('# Earlier conversation');
+    expect(prompt).toContain('### Reviewer\nWhy is this needed?');
+    expect(prompt).toContain('### Assistant\nThe helper now checks the new limit.');
+    expect(prompt.indexOf('## Exchange 1')).toBeLessThan(prompt.indexOf('## Exchange 2'));
+    expect(prompt).toContain('Earlier answers are not proof');
+    expect(prompt).toContain('+const value = shared();');
+  }
+});
+
+test.each([
+  null,
+  {},
+  [{ question: 'Earlier question', reply: '' }],
+  [{ question: 'Earlier question', reply: 'x'.repeat(64_001) }],
+])(
+  'rejects invalid or oversized conversation history without silently discarding it',
+  async (previousTurns) => {
+    const { result, run } = await read(state(), answer, { ...request, previousTurns });
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      reason: expect.stringContaining('original note'),
+    });
+    expect(run).not.toHaveBeenCalled();
+  },
+);
+
 test('treats descriptions as intent and visibly discloses shortened material', async () => {
   const run = vi.fn<Run>().mockResolvedValue(JSON.stringify(answer));
   const result = await readReviewAssistantReply(

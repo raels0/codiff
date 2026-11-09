@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type RefObject } from 'react';
 import type { ReviewComment } from '../../lib/app-types.ts';
 import {
+  getCommentKey,
   getPendingPullRequestReviewComments,
   getReviewCommentRangeProps,
   toPullRequestReviewComment,
@@ -88,7 +89,7 @@ export function useAppReviewComments({
   );
 
   const askCodex = useCallback(
-    (commentId: string) => {
+    (commentId: string, followUp?: string) => {
       const currentState = stateRef.current;
       const comment = reviewCommentsRef.current.find((candidate) => candidate.id === commentId);
       if (
@@ -101,21 +102,50 @@ export function useAppReviewComments({
         return;
       }
 
+      const reviewKey = `${currentState.root}:${getSourceKey(currentState.source)}`;
+      const reviewVersion = getReviewVersion(currentState);
+      const conversationKey = `${reviewKey}:${reviewVersion}:${getCommentKey(comment)}`;
+      const previousTurns = followUp === undefined ? [] : comment.codexReply?.turns || [];
+      const question = followUp === undefined ? comment.body : followUp.trim();
+      if (!question.trim()) {
+        return;
+      }
+      if (
+        followUp !== undefined &&
+        (previousTurns.length === 0 ||
+          comment.codexReply?.reviewKey !== conversationKey ||
+          previousTurns[0].question !== comment.body)
+      ) {
+        updateCodexReply(commentId, comment.filePath, {
+          ...comment.codexReply,
+          error:
+            'The review or original question changed. Use Ask on the original note to start a new conversation.',
+          question,
+          status: 'error',
+        });
+        return;
+      }
+      const pendingReply: NonNullable<ReviewComment['codexReply']> = {
+        ...(followUp !== undefined ? comment.codexReply : {}),
+        question,
+        reviewKey: conversationKey,
+        status: 'loading',
+        turns: previousTurns,
+      };
       const request: ReviewAssistantRequest = {
         comment: {
           ...(comment.anchor ? { anchor: comment.anchor } : {}),
-          body: comment.body,
+          body: question,
           filePath: comment.filePath,
           ...(comment.lineNumber != null ? { lineNumber: comment.lineNumber } : {}),
           sectionId: comment.sectionId,
           ...(comment.side ? { side: comment.side } : {}),
           ...getReviewCommentRangeProps(comment),
         },
+        ...(previousTurns.length ? { previousTurns } : {}),
         source: currentState.source,
       };
 
-      const reviewKey = `${currentState.root}:${getSourceKey(currentState.source)}`;
-      const reviewVersion = getReviewVersion(currentState);
       const acceptReply = () => {
         const latestState = stateRef.current;
         const latestComment = reviewCommentsRef.current.find(
@@ -141,6 +171,7 @@ export function useAppReviewComments({
           latestComment.startSide !== comment.startSide
         ) {
           updateCodexReply(commentId, comment.filePath, {
+            ...pendingReply,
             error:
               'The review or question changed while the answer was being prepared. Ask again for the current version.',
             status: 'error',
@@ -150,7 +181,7 @@ export function useAppReviewComments({
         return true;
       };
       pendingAnswers.current.add(commentId);
-      updateCodexReply(comment.id, comment.filePath, { status: 'loading' });
+      updateCodexReply(comment.id, comment.filePath, pendingReply);
       void window.codiff
         .askReviewAssistant(request)
         .then((result) => {
@@ -162,11 +193,22 @@ export function useAppReviewComments({
             comment.filePath,
             result.status === 'ready'
               ? {
+                  ...pendingReply,
                   body: result.reply,
-                  ...(result.context ? { context: result.context } : {}),
+                  context: result.context,
+                  error: undefined,
                   status: 'ready',
+                  turns: [
+                    ...previousTurns,
+                    {
+                      ...(result.context ? { context: result.context } : {}),
+                      question,
+                      reply: result.reply,
+                    },
+                  ],
                 }
               : {
+                  ...pendingReply,
                   error: result.reason,
                   ...(result.context ? { context: result.context } : {}),
                   status: 'error',
@@ -178,6 +220,7 @@ export function useAppReviewComments({
             return;
           }
           updateCodexReply(comment.id, comment.filePath, {
+            ...pendingReply,
             error: error instanceof Error ? error.message : String(error),
             status: 'error',
           });

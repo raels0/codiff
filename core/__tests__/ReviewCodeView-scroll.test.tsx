@@ -2348,6 +2348,110 @@ test('adding an empty local review comment with Mod+Enter discards it', async ()
   expect(onDeleteComment).toHaveBeenCalledWith('comment-1');
 });
 
+test('Ask follow-ups support Send and Ctrl+Enter without sending plain Enter or IME input', async () => {
+  const file = createChangedFile('src/comment.ts');
+  const onAskCodex = vi.fn();
+  const comment: ReviewComment = {
+    body: 'Explain this change.',
+    filePath: file.path,
+    id: 'comment-1',
+    lineNumber: 1,
+    sectionId: 'src/comment.ts:unstaged',
+    side: 'additions',
+    codexReply: {
+      body: 'First answer',
+      status: 'ready',
+      turns: [{ question: 'Explain this change.', reply: 'First answer' }],
+    },
+  };
+  await using view = await renderReact(
+    <ReviewCodeViewHarness comments={[comment]} files={[file]} onAskCodex={onAskCodex} />,
+  );
+  const input = view.container.querySelector<HTMLTextAreaElement>(
+    '.review-comment-assistant-follow-up textarea',
+  );
+  if (!input) {
+    throw new Error('Expected a follow-up input.');
+  }
+  await setInputValue(input, '  What about the caller?  ');
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        ctrlKey: true,
+        isComposing: true,
+        key: 'Enter',
+      }),
+    );
+  });
+  expect(onAskCodex).not.toHaveBeenCalled();
+  await act(async () => {
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, ctrlKey: true, key: 'Enter' }),
+    );
+  });
+  expect(onAskCodex).toHaveBeenLastCalledWith('comment-1', 'What about the caller?');
+  await setInputValue(input, 'And the helper?');
+  await act(async () => {
+    view.container
+      .querySelector<HTMLButtonElement>('.review-comment-assistant-follow-up button')
+      ?.click();
+  });
+  expect(onAskCodex).toHaveBeenLastCalledWith('comment-1', 'And the helper?');
+});
+
+test('Ask keeps its transcript and failed follow-up draft, then clears the input after a successful answer', async () => {
+  const file = createChangedFile('src/comment.ts');
+  const comment: ReviewComment = {
+    body: 'Explain this change.',
+    filePath: file.path,
+    id: 'comment-1',
+    lineNumber: 1,
+    sectionId: 'src/comment.ts:unstaged',
+    side: 'additions',
+  };
+  const turns = [{ question: comment.body, reply: 'First answer' }];
+  const render = (reply: NonNullable<ReviewComment['codexReply']>) => (
+    <ReviewCodeViewHarness comments={[{ ...comment, codexReply: reply }]} files={[file]} />
+  );
+  await using view = await renderReact(render({ status: 'ready', turns }));
+  const getInput = () => {
+    const input = view.container.querySelector<HTMLTextAreaElement>(
+      '.review-comment-assistant-follow-up textarea',
+    );
+    if (!input) {
+      throw new Error('Expected a follow-up input.');
+    }
+    return input;
+  };
+  await setInputValue(getInput(), 'Clarify this.');
+  await view.rerender(render({ question: 'Clarify this.', status: 'loading', turns }));
+  expect(getInput().disabled).toBe(true);
+  expect(view.container.querySelector('[aria-label="Codex reply"]')).not.toBeNull();
+  expect(
+    view.container.querySelector<HTMLButtonElement>('.review-comment-assistant-follow-up button')
+      ?.disabled,
+  ).toBe(true);
+  await view.rerender(
+    render({ error: 'Connection failed', question: 'Clarify this.', status: 'error', turns }),
+  );
+  expect(getInput().value).toBe('Clarify this.');
+  expect(getInput().disabled).toBe(false);
+  expect(view.container.querySelector('[aria-label="Codex reply"]')).not.toBeNull();
+  expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
+  await view.rerender(
+    render({
+      status: 'ready',
+      turns: [...turns, { question: 'Clarify this.', reply: 'Second answer' }],
+    }),
+  );
+  expect(getInput().value).toBe('');
+  expect(view.container.querySelector('[aria-label="Codex reply"]')).not.toBeNull();
+  expect(view.container.querySelector('[aria-label="Codex reply 2"]')).not.toBeNull();
+  expect(view.container.querySelector('[aria-label="Follow-up question 1"]')).not.toBeNull();
+});
+
 test('a Codex reply does not repeatedly invalidate the diff item layout', async () => {
   const file = createChangedFile('src/comment.ts');
   const comment = {

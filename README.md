@@ -167,6 +167,15 @@ The shared instructions are written in plain English in
 [`electron/prompts/review-assistant.md`](electron/prompts/review-assistant.md).
 They ask for direct answers and file/line references, not just rewritten comments.
 
+Use **Ask a follow-up** below an answer to continue the conversation. Earlier
+questions and answers stay visible and are included with the next question.
+Click **Send**, or press <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>; plain
+<kbd>Enter</kbd> adds a new line. Failed follow-ups keep the conversation and your
+draft so you can retry. **Ask** on the original note starts a fresh conversation.
+After the reviewed code or original question changes, start fresh rather than
+mixing answers from different versions. Conversations that exceed the input
+limit report an explicit error instead of silently dropping earlier exchanges.
+
 ## Configuration
 
 Codiff reads configuration from `~/.codiff/codiff.jsonc`. Open `Codiff > Open Config File...` to

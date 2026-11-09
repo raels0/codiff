@@ -87,6 +87,30 @@ const readReviewAssistantReply = async (state, request, agent, agentOptions) => 
     if (!request?.comment?.body?.trim() || request.comment.body.length > 16_000) {
       throw new Error('Ask a question of no more than 16,000 characters.');
     }
+    const previousTurns = request.previousTurns === undefined ? [] : request.previousTurns;
+    if (
+      !Array.isArray(previousTurns) ||
+      previousTurns.some(
+        (turn) =>
+          !turn ||
+          typeof turn.question !== 'string' ||
+          !turn.question.trim() ||
+          typeof turn.reply !== 'string' ||
+          !turn.reply.trim(),
+      )
+    ) {
+      throw new Error(
+        'The earlier conversation is incomplete. Use Ask on the original note to start again.',
+      );
+    }
+    if (
+      previousTurns.reduce((size, turn) => size + turn.question.length + turn.reply.length, 0) >
+      64_000
+    ) {
+      throw new Error(
+        'This conversation is too long to send in full. Use Ask on the original note to start a new conversation.',
+      );
+    }
     context = await createReviewAssistantContext(state, request);
     const source = state.source;
     const description = source.type === 'pull-request' ? source.description || '' : '';
@@ -95,6 +119,14 @@ const readReviewAssistantReply = async (state, request, agent, agentOptions) => 
     const overview = [
       '# Reviewer’s question',
       location.body,
+      previousTurns.length
+        ? `# Earlier conversation\n\n${previousTurns
+            .map(
+              (turn, index) =>
+                `## Exchange ${index + 1}\n\n### Reviewer\n${turn.question}\n\n### Assistant\n${turn.reply}`,
+            )
+            .join('\n\n')}`
+        : '',
       '# Selected location',
       `${location.filePath}${location.lineNumber ? `:${location.startLineNumber || location.lineNumber}–${location.lineNumber}` : ''}${location.side ? ` (${location.side})` : ''}`,
       '# Review',

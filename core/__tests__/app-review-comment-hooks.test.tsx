@@ -6,7 +6,7 @@ import { act, useLayoutEffect, useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { useAppReviewComments } from '../app/hooks/useAppReviewComments.ts';
 import type { ReviewComment } from '../lib/app-types.ts';
-import type { RepositoryState, ReviewAssistantResult } from '../types.ts';
+import type { RepositoryState, ReviewAssistantRequest, ReviewAssistantResult } from '../types.ts';
 import { renderReact, waitFor } from './helpers/react.tsx';
 
 type AppReviewComments = ReturnType<typeof useAppReviewComments>;
@@ -125,14 +125,120 @@ test('app review comments request and store assistant replies', async () => {
     source: workingTreeState.source,
   });
   await waitFor(() => {
-    expect(getState().reviewComments[0]?.codexReply).toEqual({
+    expect(getState().reviewComments[0]?.codexReply).toMatchObject({
       body: 'Use the shared parser.',
       context,
+      question: comment.body,
+      reviewKey: expect.any(String),
       status: 'ready',
+      turns: [{ context, question: comment.body, reply: 'Use the shared parser.' }],
     });
   });
   expect(onCommentFileChange).toHaveBeenCalledTimes(2);
 });
+
+test('follow-up requests retain the conversation without changing the original note or other threads', async () => {
+  const askReviewAssistant = vi.fn(async (request: ReviewAssistantRequest) => ({
+    reply: `Answer to: ${request.comment.body}`,
+    status: 'ready' as const,
+  }));
+  window.codiff = { askReviewAssistant } as unknown as Window['codiff'];
+  await using view = await renderAppReviewComments(pullRequestState);
+  const other = { ...comment, body: 'Another thread', id: 'comment-2' };
+  await act(async () => view.getState().setReviewComments([comment, other]));
+  await act(async () => view.getState().askCodex(comment.id));
+  await act(async () => view.getState().askCodex(other.id));
+  await act(async () => view.getState().askCodex(comment.id, '  Why that helper?  '));
+  await act(async () => view.getState().askCodex(comment.id, 'And the caller?'));
+  expect(askReviewAssistant.mock.calls[2][0]).toMatchObject({
+    comment: { body: 'Why that helper?', filePath: comment.filePath, lineNumber: 4 },
+    previousTurns: [{ question: comment.body, reply: `Answer to: ${comment.body}` }],
+    source: pullRequestState.source,
+  });
+  expect(askReviewAssistant.mock.calls[3][0].previousTurns).toEqual([
+    { question: comment.body, reply: `Answer to: ${comment.body}` },
+    { question: 'Why that helper?', reply: 'Answer to: Why that helper?' },
+  ]);
+  expect(view.getState().reviewComments[0]).toMatchObject({
+    body: comment.body,
+    codexReply: {
+      status: 'ready',
+      turns: [
+        { question: comment.body, reply: `Answer to: ${comment.body}` },
+        { question: 'Why that helper?', reply: 'Answer to: Why that helper?' },
+        { question: 'And the caller?', reply: 'Answer to: And the caller?' },
+      ],
+    },
+  });
+  expect(view.getState().reviewComments[1]?.codexReply?.turns).toHaveLength(1);
+});
+
+test('failed follow-ups retain earlier answers and the question, and retry adds only one exchange', async () => {
+  const pending = Promise.withResolvers<ReviewAssistantResult>();
+  const askReviewAssistant = vi
+    .fn()
+    .mockResolvedValueOnce({ reply: 'First answer', status: 'ready' })
+    .mockImplementationOnce(() => pending.promise)
+    .mockResolvedValueOnce({ reply: 'Second answer', status: 'ready' });
+  window.codiff = { askReviewAssistant } as unknown as Window['codiff'];
+  await using view = await renderAppReviewComments(pullRequestState);
+  await act(async () => view.getState().setReviewComments([comment]));
+  await act(async () => view.getState().askCodex(comment.id));
+  await act(async () => {
+    view.getState().askCodex(comment.id, 'Why?');
+    view.getState().askCodex(comment.id, 'Why?');
+  });
+  expect(askReviewAssistant).toHaveBeenCalledTimes(2);
+  expect(view.getState().reviewComments[0]?.codexReply).toMatchObject({
+    body: 'First answer',
+    status: 'loading',
+    turns: [{ question: comment.body, reply: 'First answer' }],
+  });
+  await act(async () => pending.resolve({ reason: 'Connection failed', status: 'unavailable' }));
+  expect(view.getState().reviewComments[0]?.codexReply).toMatchObject({
+    error: 'Connection failed',
+    question: 'Why?',
+    status: 'error',
+    turns: [{ question: comment.body, reply: 'First answer' }],
+  });
+  await act(async () => view.getState().askCodex(comment.id, 'Why?'));
+  expect(view.getState().reviewComments[0]?.codexReply?.turns).toEqual([
+    { question: comment.body, reply: 'First answer' },
+    { question: 'Why?', reply: 'Second answer' },
+  ]);
+});
+
+test.each(['commits', 'question'])(
+  'follow-ups reject changed %s and Ask starts a fresh conversation',
+  async (change) => {
+    const askReviewAssistant = vi.fn(async () => ({
+      reply: 'An answer',
+      status: 'ready' as const,
+    }));
+    window.codiff = { askReviewAssistant } as unknown as Window['codiff'];
+    await using view = await renderAppReviewComments(pullRequestState);
+    await act(async () => view.getState().setReviewComments([comment]));
+    await act(async () => view.getState().askCodex(comment.id));
+    if (change === 'commits') {
+      await view.rerenderState({
+        ...pullRequestState,
+        source: { ...pullRequestState.source, headSha: 'new-version' },
+      });
+    } else {
+      await act(async () => view.getState().updateComment(comment.id, 'Edited original note'));
+    }
+    await act(async () => view.getState().askCodex(comment.id, 'More detail?'));
+    expect(askReviewAssistant).toHaveBeenCalledTimes(1);
+    expect(view.getState().reviewComments[0]?.codexReply).toMatchObject({
+      error: expect.stringContaining('start a new conversation'),
+      status: 'error',
+    });
+    expect(view.getState().reviewComments[0]?.codexReply?.turns).toHaveLength(1);
+    await act(async () => view.getState().askCodex(comment.id));
+    expect(askReviewAssistant).toHaveBeenCalledTimes(2);
+    expect(view.getState().reviewComments[0]?.codexReply?.turns).toHaveLength(1);
+  },
+);
 
 test.each(['commits', 'question', 'draft', 'review', 'hydration'])(
   'assistant replies respect in-flight %s changes and prevent duplicate requests',

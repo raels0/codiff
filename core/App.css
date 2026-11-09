@@ -4153,6 +4153,51 @@ diffs-container .review-comment-thread {
   margin-top: 6px;
 }
 
+.review-comment-assistant-turn + .review-comment-assistant-turn,
+.review-comment-assistant-follow-up {
+  border-top: 1px solid var(--file-border);
+}
+
+.review-comment-assistant-question {
+  background: var(--file-bg);
+}
+
+.review-comment-assistant-follow-up {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  font: 13px/1.5 var(--font-sans);
+}
+
+.review-comment-assistant-follow-up textarea {
+  background: var(--file-bg);
+  border: 1px solid var(--file-border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  min-height: 64px;
+  padding: 8px;
+  resize: vertical;
+  width: 100%;
+}
+
+.review-comment-assistant-follow-up textarea:focus-visible {
+  outline: 2px solid var(--tree-selection-focus);
+  outline-offset: 2px;
+}
+
+.review-comment-assistant-follow-up > div {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.review-comment-assistant-follow-up span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .review-comment-codex-reply {
   color: var(--text);
   font: 13px/1.5 var(--font-sans);
