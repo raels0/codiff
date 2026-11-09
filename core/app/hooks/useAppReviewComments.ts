@@ -174,8 +174,9 @@ export function useAppReviewComments({
           updateCodexReply(comment.id, comment.filePath, {
             error: error instanceof Error ? error.message : String(error),
             status: 'error',
-          }).finally(() => pendingAnswers.current.delete(commentId));
-        });
+          });
+        })
+        .finally(() => pendingAnswers.current.delete(commentId));
     },
     [reviewCommentsRef, stateRef, updateCodexReply],
   );

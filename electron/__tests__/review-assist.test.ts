@@ -166,6 +166,23 @@ test('retrieves omitted changes, source lines, and the rest of a large file list
   expect(result.context?.warnings.length).toBeGreaterThan(0);
 });
 
+test('keeps the selected lines in view when a large patch needs paging', async () => {
+  const patch = [
+    'diff --git a/selected.ts b/selected.ts',
+    '--- a/selected.ts',
+    '+++ b/selected.ts',
+    '@@ -1 +1,1000 @@',
+    '-oldValue',
+    ...Array.from({ length: 1000 }, (_, index) => `+line${index} ${'x'.repeat(100)}`),
+  ].join('\n');
+  const { prompt, result } = await read(state([file('selected.ts', patch)]), answer, {
+    comment: { ...request.comment, lineNumber: 900 },
+  });
+  expect(result.status).toBe('ready');
+  expect(prompt).toContain('+line899 ');
+  expect(prompt).not.toContain('+line1 ');
+});
+
 test('keeps additional context reads bounded and does not invent an answer on failure', async () => {
   const run = vi.fn<Run>().mockResolvedValue(JSON.stringify(requestMore('changes', 'selected.ts')));
   const result = await readReviewAssistantReply(state(), request, agent(run), {
