@@ -121,6 +121,7 @@ export function useAppReviewComments({
         const latestComment = reviewCommentsRef.current.find(
           (candidate) => candidate.id === commentId,
         );
+        const latestDraft = activeReviewCommentDraftRef.current;
         if (
           !latestState ||
           !latestComment ||
@@ -130,7 +131,8 @@ export function useAppReviewComments({
         }
         if (
           getReviewVersion(latestState) !== reviewVersion ||
-          latestComment.body !== comment.body ||
+          (latestDraft?.id === commentId ? latestDraft.body : latestComment.body) !==
+            comment.body ||
           latestComment.filePath !== comment.filePath ||
           latestComment.sectionId !== comment.sectionId ||
           latestComment.lineNumber !== comment.lineNumber ||
@@ -182,7 +184,7 @@ export function useAppReviewComments({
         })
         .finally(() => pendingAnswers.current.delete(commentId));
     },
-    [reviewCommentsRef, stateRef, updateCodexReply],
+    [activeReviewCommentDraftRef, reviewCommentsRef, stateRef, updateCodexReply],
   );
 
   const submitPullRequestComment = useCallback(

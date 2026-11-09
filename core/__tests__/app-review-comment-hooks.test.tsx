@@ -134,7 +134,7 @@ test('app review comments request and store assistant replies', async () => {
   expect(onCommentFileChange).toHaveBeenCalledTimes(2);
 });
 
-test.each(['commits', 'question', 'review', 'hydration'])(
+test.each(['commits', 'question', 'draft', 'review', 'hydration'])(
   'assistant replies respect in-flight %s changes and prevent duplicate requests',
   async (change) => {
     const pending = Promise.withResolvers<ReviewAssistantResult>();
@@ -153,6 +153,13 @@ test.each(['commits', 'question', 'review', 'hydration'])(
     expect(askReviewAssistant).toHaveBeenCalledTimes(1);
     if (change === 'question') {
       await act(async () => view.getState().updateComment(comment.id, 'A different question'));
+    } else if (change === 'draft') {
+      await act(async () =>
+        view.getState().updateActiveReviewCommentDraft({
+          body: 'Still editing a different question',
+          id: comment.id,
+        }),
+      );
     } else {
       await view.rerenderState({
         ...initial,
