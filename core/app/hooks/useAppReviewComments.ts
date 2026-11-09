@@ -152,7 +152,9 @@ export function useAppReviewComments({
       void window.codiff
         .askReviewAssistant(request)
         .then((result) => {
-          if (!acceptReply()) return;
+          if (!acceptReply()) {
+            return;
+          }
           updateCodexReply(
             comment.id,
             comment.filePath,
@@ -170,7 +172,9 @@ export function useAppReviewComments({
           );
         })
         .catch((error: unknown) => {
-          if (!acceptReply()) return;
+          if (!acceptReply()) {
+            return;
+          }
           updateCodexReply(comment.id, comment.filePath, {
             error: error instanceof Error ? error.message : String(error),
             status: 'error',

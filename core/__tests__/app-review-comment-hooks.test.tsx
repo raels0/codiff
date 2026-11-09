@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { act, useRef } from 'react';
+import { act, useLayoutEffect, useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { useAppReviewComments } from '../app/hooks/useAppReviewComments.ts';
 import type { ReviewComment } from '../lib/app-types.ts';
@@ -50,7 +50,9 @@ function AppReviewCommentsHarness({
   state: RepositoryState;
 }) {
   const stateRef = useRef<RepositoryState | null>(state);
-  stateRef.current = state;
+  useLayoutEffect(() => {
+    stateRef.current = state;
+  }, [state]);
   const comments = useAppReviewComments({
     isReviewActionDisabled: () => false,
     onCommentFileChange,
