@@ -43,7 +43,14 @@ terminal.onExit((/** @type {{ exitCode: number }} */ { exitCode }) => {
   assert.equal(timedOut, false, 'The packaged native terminal must finish within 15 seconds.');
   assert.equal(exitCode, 0, 'The packaged native terminal must exit successfully.');
   assert.ok(output.includes(marker), 'The packaged native terminal must return its output.');
-  console.log(`Verified Windows ${expectedArch}: Electron, keyboard mapping, and native terminal.`);
-  // native-keymap keeps its keyboard-layout listener alive until the process exits.
-  process.exit(0);
+  // Flush the result before exiting: native-keymap keeps its layout listener alive.
+  process.stdout.write(
+    `Verified Windows ${expectedArch}: Electron, keyboard mapping, and native terminal.\n`,
+    (error) => {
+      if (error) {
+        throw error;
+      }
+      process.exit(0);
+    },
+  );
 });
