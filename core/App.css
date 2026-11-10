@@ -246,7 +246,7 @@
 }
 
 .squircle {
-  border-radius: 28px;
+  border-radius: 22px;
   corner-shape: squircle;
 }
 
@@ -654,7 +654,7 @@ html[data-codiff-platform='darwin'] .workspace-top-bar {
   .plan-comment-rail {
     background: var(--code-bg);
     border: 1px solid var(--file-border);
-    border-radius: var(--codiff-diff-radius, 28px);
+    border-radius: var(--codiff-diff-radius, 22px);
     bottom: 12px;
     box-shadow:
       0 0 0 1px rgb(255 255 255 / 0.03) inset,
@@ -838,7 +838,7 @@ html[data-codiff-platform='darwin'] .workspace-top-bar {
 
 .review-top-bar-branch {
   align-items: center;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--muted);
   corner-shape: squircle;
   display: inline-flex;
@@ -907,7 +907,7 @@ a.review-top-bar-source:focus-visible {
 .review-mode-control {
   -webkit-app-region: no-drag;
   align-items: center;
-  border-radius: 16px;
+  border-radius: 14px;
   corner-shape: squircle;
   display: inline-flex;
   flex: none;
@@ -926,7 +926,7 @@ a.review-top-bar-source:focus-visible {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--muted);
   corner-shape: squircle;
   cursor: pointer;
@@ -1071,7 +1071,7 @@ a.review-top-bar-source:focus-visible {
   align-items: center;
   background: color-mix(in srgb, var(--viewed) 10%, var(--code-bg));
   border: 1px solid color-mix(in srgb, var(--viewed) 18%, transparent);
-  border-radius: 17px;
+  border-radius: 14px;
   box-shadow: 0 16px 46px -30px color-mix(in srgb, var(--viewed) 52%, rgb(0 0 0));
   color: color-mix(in srgb, var(--viewed) 36%, var(--text));
   corner-shape: squircle;
@@ -1164,7 +1164,7 @@ a.review-top-bar-source:focus-visible {
   align-items: flex-start;
   background: color-mix(in srgb, #d9822b 12%, var(--code-bg));
   border: 1px solid color-mix(in srgb, #d9822b 32%, transparent);
-  border-radius: 17px;
+  border-radius: 14px;
   box-shadow: 0 16px 46px -30px color-mix(in srgb, #d9822b 52%, rgb(0 0 0));
   color: color-mix(in srgb, #d9822b 32%, var(--text));
   corner-shape: squircle;
@@ -1212,7 +1212,7 @@ a.review-top-bar-source:focus-visible {
   backdrop-filter: blur(24px) saturate(1.35);
   background: color-mix(in srgb, var(--code-bg) 76%, transparent);
   border: 1px solid var(--file-border);
-  border-radius: 17px;
+  border-radius: 14px;
   box-shadow: 0 18px 58px -34px rgb(0 0 0 / 0.72);
   color: var(--text);
   corner-shape: squircle;
@@ -1379,7 +1379,7 @@ html[data-codiff-platform='darwin'] .sidebar {
   -webkit-app-region: no-drag;
   background: rgb(127 127 127 / 0.1);
   border: 0;
-  border-radius: 15px;
+  border-radius: 12px;
   color: var(--sidebar-text);
   corner-shape: squircle;
   font: 13px/1.35 var(--font-sans);
@@ -1778,7 +1778,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 }
 
 .code-view {
-  --codiff-diff-radius: 28px;
+  --codiff-diff-radius: 22px;
   background: var(--app-bg);
   contain: strict;
   display: block;
@@ -2280,7 +2280,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 }
 
 .merge-request-comments-source-description {
-  --codiff-diff-radius: 28px;
+  --codiff-diff-radius: 22px;
 
   border-radius: var(--codiff-diff-radius);
   box-shadow:
@@ -3282,7 +3282,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 
 .codiff-copy-path-button,
 .codiff-open-file-button {
-  border-radius: 15px;
+  border-radius: 12px;
   color: var(--copy-icon);
   corner-shape: squircle;
   flex: none;
@@ -3362,7 +3362,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 
 .codiff-chevron-box {
   align-items: center;
-  border-radius: 15px;
+  border-radius: 12px;
   corner-shape: squircle;
   display: inline-flex;
   height: 30px;
@@ -3463,7 +3463,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 .codiff-markdown-button,
 .codiff-button,
 .codiff-viewed-button {
-  border-radius: 14px;
+  border-radius: 12px;
   corner-shape: squircle;
   font: 600 12px/1 var(--font-sans);
 }
@@ -4677,7 +4677,7 @@ diffs-container .review-comment-thread {
   backdrop-filter: blur(28px) saturate(1.4);
   background: color-mix(in srgb, var(--code-bg) 88%, transparent);
   border: 1px solid var(--file-border);
-  border-radius: 28px;
+  border-radius: 22px;
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.12) inset,
     0 18px 80px -54px rgb(0 0 0 / 0.78),
@@ -4810,7 +4810,7 @@ diffs-container .review-comment-thread {
   backdrop-filter: blur(28px) saturate(1.4);
   background: color-mix(in srgb, var(--code-bg) 88%, transparent);
   border: 1px solid var(--file-border);
-  border-radius: 28px;
+  border-radius: 22px;
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.12) inset,
     0 18px 80px -54px rgb(0 0 0 / 0.78),
@@ -4831,7 +4831,7 @@ diffs-container .review-comment-thread {
 .command-bar-input {
   background: rgb(127 127 127 / 0.1);
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   color: var(--text);
   corner-shape: squircle;
   font: 13px/1.35 var(--font-sans);
@@ -4956,7 +4956,7 @@ diffs-container .review-comment-thread {
 .open-review-source-input {
   background: rgb(127 127 127 / 0.1);
   border: 0;
-  border-radius: 17px;
+  border-radius: 14px;
   color: var(--text);
   corner-shape: squircle;
   font: 14px/1.35 var(--font-sans);
