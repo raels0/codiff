@@ -119,6 +119,7 @@ declare global {
       saveRepositoryFile: (request: SaveRepositoryFileRequest) => Promise<SaveRepositoryFileResult>;
       setDiffStyle: (value: CodiffPreferences['diffStyle']) => Promise<void>;
       setPullRequestFileViewed: (request: SetPullRequestFileViewedRequest) => Promise<void>;
+      setReviewTheme: (value: CodiffPreferences['reviewTheme']) => Promise<void>;
       setShowOutdated: (value: boolean) => Promise<void>;
       setWordWrap: (value: boolean) => Promise<void>;
       sharePlan: (review: PlanReview) => Promise<SharePlanResult>;

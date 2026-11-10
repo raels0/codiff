@@ -51,26 +51,40 @@ export function ReviewSourceLoading() {
 }
 
 export function RepositoryChangeBanner({
+  error,
   onRefresh,
+  refreshing = false,
   visible,
 }: {
+  error?: string | null;
   onRefresh: () => void;
+  refreshing?: boolean;
   visible: boolean;
 }) {
   const [dismissed, setDismissed] = useState(false);
+  const showBanner = visible || error != null;
   // Re-arm the dismiss latch once the current change is refreshed away, so the
   // banner comes back for the next change instead of staying dismissed forever.
-  if (!visible && dismissed) {
+  if (!showBanner && dismissed) {
     setDismissed(false);
   }
-  const isVisible = visible && !dismissed;
+  const isVisible = showBanner && !dismissed;
 
   return (
-    <div aria-live="polite" className={`repository-change-banner${isVisible ? ' visible' : ''}`}>
+    <div
+      aria-live="polite"
+      className={`repository-change-banner${error ? ' error' : ''}${isVisible ? ' visible' : ''}`}
+      role={error ? 'alert' : undefined}
+    >
       <span className="repository-change-banner-content">
-        <span>Local changes detected,</span>
-        <button className="repository-change-reload" onClick={onRefresh} type="button">
-          refresh to see them.
+        <span>{error ? `Refresh failed: ${error}` : 'Local changes detected,'}</span>
+        <button
+          className="repository-change-reload"
+          disabled={refreshing}
+          onClick={onRefresh}
+          type="button"
+        >
+          {error ? 'Retry' : 'refresh to see them.'}
         </button>
       </span>
       <button

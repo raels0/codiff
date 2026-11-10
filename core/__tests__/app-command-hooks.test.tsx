@@ -71,6 +71,7 @@ test('app commands register the complete command set and delegate dynamic action
   const onOpenReviewSource = vi.fn();
   const onOpenSelectedFile = vi.fn();
   const onRefreshRepository = vi.fn();
+  const onSetReviewTheme = vi.fn();
   const onToggleSidebar = vi.fn();
   const onToggleViewed = vi.fn();
   const onToggleWordWrap = vi.fn();
@@ -86,6 +87,7 @@ test('app commands register the complete command set and delegate dynamic action
         onOpenReviewSource,
         onOpenSelectedFile,
         onRefreshRepository,
+        onSetReviewTheme,
         onToggleSidebar,
         onToggleViewed,
         onToggleWordWrap,
@@ -115,6 +117,8 @@ test('app commands register the complete command set and delegate dynamic action
     'toggle-outdated-comments',
     'toggle-diff-layout',
     'toggle-word-wrap',
+    'review-theme-neutral',
+    'review-theme-blue-amber',
     'increase-code-font-size',
     'decrease-code-font-size',
     'reset-code-font-size',
@@ -152,6 +156,12 @@ test('app commands register the complete command set and delegate dynamic action
   expect(command('toggle-word-wrap').description?.()).toBe('Enable Word Wrap');
   preferencesRef.current.wordWrap = true;
   expect(command('toggle-word-wrap').description?.()).toBe('Disable Word Wrap');
+  expect(command('review-theme-neutral').description?.()).toBe('Selected');
+  command('review-theme-neutral').execute();
+  command('review-theme-blue-amber').execute();
+  expect(onSetReviewTheme.mock.calls).toEqual([['neutral'], ['blue-amber']]);
+  preferencesRef.current.reviewTheme = 'blue-amber';
+  expect(command('review-theme-blue-amber').description?.()).toBe('Selected');
 });
 
 const keyboardKeymap = {

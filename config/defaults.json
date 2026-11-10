@@ -16,6 +16,7 @@
     "piModel": "pi-default",
     "renderMarkdownAs": "preview",
     "reviewCommentsPrefix": "# Address these Review Comments",
+    "reviewTheme": "neutral",
     "sidebarPosition": "left",
     "showOutdated": false,
     "showWhitespace": false,
@@ -26,7 +27,7 @@
   "keymap": {
     "askAgent": "Mod+Alt+Enter",
     "closeSearch": "Escape",
-    "commandBar": "Mod+k",
+    "commandBar": ["Mod+Shift+p", "Mod+k"],
     "diffSearch": "Mod+f",
     "discardComment": "Escape",
     "doneEditing": "Mod+s",

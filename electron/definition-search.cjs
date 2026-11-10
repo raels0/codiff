@@ -316,6 +316,9 @@ const resolveSearchRevision = async (request, repoPath) => {
   } else if (source.type === 'branch') {
     head = source.ref;
     base = `${source.ref}^`;
+  } else if (source.type === 'pull-request' && source.provider === 'azure-devops') {
+    head = source.headSha || null;
+    base = source.baseSha || null;
   } else if (source.type === 'pull-request' && source.number != null) {
     const namespace = source.provider === 'gitlab' ? 'merge-requests' : 'pull-requests';
     head = `refs/codiff/${namespace}/${source.number}/head`;

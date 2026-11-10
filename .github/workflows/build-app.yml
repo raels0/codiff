@@ -130,7 +130,16 @@ jobs:
   build-windows:
     needs: create-release
     if: github.event_name == 'push' || inputs.platform == 'windows' || inputs.platform == 'all'
-    runs-on: windows-2022
+    name: Windows (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+          - arch: arm64
+            runner: windows-11-arm
     timeout-minutes: 60
     env:
       CODIFF_SKIP_SQUIRREL: '1'
@@ -141,6 +150,7 @@ jobs:
       - name: Use Node.js 24.21.0
         uses: actions/setup-node@v4
         with:
+          architecture: ${{ matrix.arch }}
           node-version: 24.21.0
 
       - name: Install pnpm
@@ -153,9 +163,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/electron-cache
-          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-electron-
+            ${{ runner.os }}-${{ matrix.arch }}-electron-
 
       - name: Install Node Dependencies
         run: pnpm install
@@ -172,8 +182,18 @@ jobs:
         run: |
           rm -rf ./out
 
-          pnpm exec electron-forge make --platform=win32 --arch=x64
+          pnpm exec electron-forge make --platform=win32 --arch=${{ matrix.arch }}
           test -d ./out
+
+      - name: Verify Windows Runtime and Native Modules
+        shell: pwsh
+        run: |
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          $process = Start-Process -Wait -PassThru -NoNewWindow `
+            -FilePath ".\out\Codiff-win32-${{ matrix.arch }}\codiff.exe" `
+            -ArgumentList '.\.github\scripts\verify-windows-package.cjs', `
+              ".\out\Codiff-win32-${{ matrix.arch }}", '${{ matrix.arch }}'
+          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
 
       - name: Attach Windows App to Release
         shell: bash
@@ -183,7 +203,7 @@ jobs:
           shopt -s nullglob
 
           assets=(
-            out/make/zip/win32/x64/*.zip
+            out/make/zip/win32/${{ matrix.arch }}/*.zip
           )
 
           if [ "${#assets[@]}" -eq 0 ]; then

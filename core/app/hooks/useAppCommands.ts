@@ -19,6 +19,7 @@ type UseAppCommandsOptions = {
   onOpenReviewSource: (kind: OpenReviewSourceKind) => void;
   onOpenSelectedFile: () => void;
   onRefreshRepository: () => void;
+  onSetReviewTheme: (theme: CodiffPreferences['reviewTheme']) => void;
   onToggleSidebar: () => void;
   onToggleViewed: (file: ChangedFile, isViewed: boolean, reviewIdentity: ReviewIdentity) => void;
   onToggleWordWrap: () => void;
@@ -36,6 +37,7 @@ export function useAppCommands({
   onOpenReviewSource,
   onOpenSelectedFile,
   onRefreshRepository,
+  onSetReviewTheme,
   onToggleSidebar,
   onToggleViewed,
   onToggleWordWrap,
@@ -196,6 +198,24 @@ export function useAppCommands({
         title: 'Toggle Word Wrap',
       }),
       registry.register({
+        description: () =>
+          preferencesRef.current.reviewTheme === 'neutral'
+            ? 'Selected'
+            : 'Neutral code with green/red markers',
+        execute: () => onSetReviewTheme('neutral'),
+        id: 'review-theme-neutral',
+        title: 'Review Theme: Neutral Review',
+      }),
+      registry.register({
+        description: () =>
+          preferencesRef.current.reviewTheme === 'blue-amber'
+            ? 'Selected'
+            : 'Neutral code with blue/amber markers',
+        execute: () => onSetReviewTheme('blue-amber'),
+        id: 'review-theme-blue-amber',
+        title: 'Review Theme: Blue/Amber',
+      }),
+      registry.register({
         execute: () => {
           void window.codiff.increaseCodeFontSize().catch(() => {});
         },
@@ -244,6 +264,7 @@ export function useAppCommands({
     onOpenReviewSource,
     onOpenSelectedFile,
     onRefreshRepository,
+    onSetReviewTheme,
     onToggleSidebar,
     onToggleViewed,
     onToggleWordWrap,

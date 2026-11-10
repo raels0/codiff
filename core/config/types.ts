@@ -1,5 +1,6 @@
 export type CodiffDiffStyle = 'split' | 'unified';
 export type CodiffTheme = 'system' | 'light' | 'dark';
+export type CodiffReviewTheme = 'neutral' | 'blue-amber';
 export type CodiffAgentBackend = 'codex' | 'claude' | 'opencode' | 'pi';
 
 export type CodiffSettings = {
@@ -19,6 +20,7 @@ export type CodiffSettings = {
   piModel: string;
   renderMarkdownAs: 'preview' | 'source';
   reviewCommentsPrefix: string;
+  reviewTheme: CodiffReviewTheme;
   showOutdated: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';
@@ -35,7 +37,7 @@ export type KeyComboBinding = KeyCombo | ReadonlyArray<KeyCombo>;
 export type CodiffKeymap = {
   askAgent: KeyCombo;
   closeSearch: KeyCombo;
-  commandBar: KeyCombo;
+  commandBar: KeyComboBinding;
   diffSearch: KeyCombo;
   discardComment: KeyCombo;
   doneEditing: KeyCombo;

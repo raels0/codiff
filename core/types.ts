@@ -1,5 +1,5 @@
 import type { MarkdownAnnotationAnchor } from '@nkzw/mdx-editor';
-import type { CodiffDiffStyle } from './config/types.ts';
+import type { CodiffDiffStyle, CodiffReviewTheme } from './config/types.ts';
 
 export type DiffSection = {
   binary: boolean;
@@ -156,6 +156,7 @@ export type ReviewSource =
     }
   | {
       author?: ReviewAuthor;
+      baseSha?: string;
       canEditDescription?: boolean;
       canEditReviewers?: boolean;
       canEditTitle?: boolean;
@@ -167,7 +168,7 @@ export type ReviewSource =
       number?: number;
       owner?: string;
       projectPath?: string;
-      provider?: 'github' | 'gitlab';
+      provider?: 'github' | 'gitlab' | 'azure-devops';
       repo?: string;
       reviewers?: ReadonlyArray<PullRequestReviewer>;
       reviewStatus?: PullRequestReviewStatus;
@@ -692,6 +693,12 @@ export type WalkthroughCommitMessageResult =
       status: 'unavailable';
     };
 
+export type ReviewAssistantTurn = {
+  context?: ReviewAssistantContext;
+  question: string;
+  reply: string;
+};
+
 export type ReviewAssistantRequest = {
   comment: {
     anchor?: 'file' | 'line';
@@ -703,6 +710,7 @@ export type ReviewAssistantRequest = {
     startLineNumber?: number;
     startSide?: 'additions' | 'deletions';
   };
+  previousTurns?: ReadonlyArray<ReviewAssistantTurn>;
   source?: ReviewSource;
   walkthroughNote?: {
     action: 'review' | 'scan' | 'skim';
@@ -714,13 +722,23 @@ export type ReviewAssistantRequest = {
   };
 };
 
+export type ReviewAssistantContext = {
+  fileCount: number;
+  filesRead: number;
+  label: string;
+  version?: string;
+  warnings: ReadonlyArray<string>;
+};
+
 export type ReviewAssistantResult =
   | {
+      context?: ReviewAssistantContext;
       reply: string;
       status: 'ready';
     }
   | {
       code?: 'CODEX_NOT_FOUND' | 'CLAUDE_NOT_FOUND' | 'OPENCODE_NOT_FOUND' | 'PI_NOT_FOUND';
+      context?: ReviewAssistantContext;
       reason: string;
       status: 'unavailable';
     };
@@ -811,6 +829,7 @@ export type CodiffPreferences = {
   piModel: string;
   renderMarkdownAs: 'preview' | 'source';
   reviewCommentsPrefix: string;
+  reviewTheme: CodiffReviewTheme;
   showOutdated: boolean;
   showWhitespace: boolean;
   sidebarPosition: 'left' | 'right';

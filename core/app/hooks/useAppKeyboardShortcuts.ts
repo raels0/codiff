@@ -28,6 +28,7 @@ export function useAppKeyboardShortcuts({
 }: UseAppKeyboardShortcutsOptions) {
   const [commandBarVisible, setCommandBarVisible] = useState(false);
   const [shortcutsHelpVisible, setShortcutsHelpVisible] = useState(false);
+  const openCommandBar = useCallback(() => setCommandBarVisible(true), []);
   const closeCommandBar = useCallback(() => setCommandBarVisible(false), []);
 
   useEffect(() => {
@@ -131,6 +132,7 @@ export function useAppKeyboardShortcuts({
   return {
     closeCommandBar,
     commandBarVisible,
+    openCommandBar,
     shortcutsHelpVisible,
   };
 }

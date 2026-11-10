@@ -14,7 +14,7 @@ type ShortcutGroup = {
 const SHORTCUT_GROUPS: ReadonlyArray<ShortcutGroup> = [
   {
     shortcuts: [
-      { action: 'commandBar', label: 'Command bar' },
+      { action: 'commandBar', label: 'Command palette' },
       { action: 'fileFilter', label: 'Filter files' },
       { action: 'nextHunk', label: 'Next hunk / comment' },
       { action: 'prevHunk', label: 'Previous hunk / comment' },

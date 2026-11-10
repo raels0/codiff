@@ -596,7 +596,7 @@ function MarkdownPreview({
 }
 
 const getPullRequestDescriptionLabel = (source: Extract<ReviewSource, { type: 'pull-request' }>) =>
-  source.provider === 'github'
+  source.provider === 'github' || source.provider === 'azure-devops'
     ? 'PR description'
     : source.provider === 'gitlab'
       ? 'MR description'
@@ -1359,6 +1359,162 @@ function ImageDiffPreview({
   );
 }
 
+function ReviewAssistantFollowUp({
+  disabled,
+  initialQuestion,
+  inputId,
+  onSend,
+}: {
+  disabled: boolean;
+  initialQuestion: string;
+  inputId: string;
+  onSend: (question: string) => void;
+}) {
+  const [question, setQuestion] = useState(initialQuestion);
+  const send = () => {
+    if (!disabled && question.trim()) {
+      onSend(question.trim());
+    }
+  };
+  return (
+    <form
+      className="review-comment-assistant-follow-up"
+      onSubmit={(event) => {
+        event.preventDefault();
+        send();
+      }}
+    >
+      <label htmlFor={inputId}>Ask a follow-up</label>
+      <textarea
+        disabled={disabled}
+        id={inputId}
+        maxLength={16_000}
+        onChange={(event) => setQuestion(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (
+            event.key === 'Enter' &&
+            isPrimaryModifier(event) &&
+            !event.altKey &&
+            !event.shiftKey &&
+            !event.nativeEvent.isComposing
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            send();
+          }
+        }}
+        placeholder="Ask about the answer…"
+        rows={2}
+        value={question}
+      />
+      <div>
+        <span>Ctrl/Cmd+Enter to send</span>
+        <button
+          className="review-comment-action"
+          disabled={disabled || !question.trim()}
+          type="submit"
+        >
+          Send
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ReviewAssistantConversation({
+  agentLabel,
+  commentId,
+  onFollowUp,
+  reply,
+}: {
+  agentLabel: string;
+  commentId: string;
+  onFollowUp?: (question: string) => void;
+  reply: NonNullable<ReviewComment['codexReply']>;
+}) {
+  const turns =
+    reply.turns ||
+    (reply.body
+      ? [
+          {
+            context: reply.context,
+            question: '',
+            reply: reply.body,
+          },
+        ]
+      : []);
+  return (
+    <>
+      {turns.map((turn, index) => (
+        <div className="review-comment-assistant-turn" key={index}>
+          {index > 0 ? (
+            <div className="review-comment-codex-reply review-comment-assistant-question">
+              <strong>You asked</strong>
+              <ReadOnlyMarkdown
+                ariaLabel={`Follow-up question ${index}`}
+                className="review-comment-codex-reply-markdown"
+                density="compact"
+                value={turn.question}
+                variant="embedded"
+              />
+            </div>
+          ) : null}
+          {turn.context ? (
+            <details className="review-comment-assistant-context">
+              <summary>
+                {turn.context.label} · {turn.context.fileCount} changed files
+                {turn.context.warnings.length ? ' · Limited context' : ''}
+              </summary>
+              <div>
+                Changes from {turn.context.filesRead} files were provided.
+                {turn.context.version ? ` Saved version: ${turn.context.version}.` : ''}
+              </div>
+              {turn.context.warnings.map((warning) => (
+                <div key={warning}>{warning}</div>
+              ))}
+            </details>
+          ) : null}
+          <div className="review-comment-codex-reply">
+            <ReadOnlyMarkdown
+              ariaLabel={index === 0 ? `${agentLabel} reply` : `${agentLabel} reply ${index + 1}`}
+              className="review-comment-codex-reply-markdown"
+              density="compact"
+              value={turn.reply}
+              variant="embedded"
+            />
+          </div>
+        </div>
+      ))}
+      {reply.status === 'loading' ? (
+        <div className="review-comment-codex-reply is-loading" role="status">
+          <span className="review-comment-codex-loading">
+            Reading review context with {agentLabel}…
+          </span>
+        </div>
+      ) : reply.status === 'error' ? (
+        <div className="review-comment-codex-reply error" role="alert">
+          <ReadOnlyMarkdown
+            ariaLabel={`${agentLabel} error`}
+            className="review-comment-codex-reply-markdown"
+            density="compact"
+            value={reply.error || 'The assistant could not answer. Ask again.'}
+            variant="embedded"
+          />
+        </div>
+      ) : null}
+      {onFollowUp && turns.length > 0 ? (
+        <ReviewAssistantFollowUp
+          disabled={reply.status === 'loading'}
+          initialQuestion={reply.status === 'ready' ? '' : reply.question || ''}
+          inputId={`ask-follow-up-${commentId}`}
+          key={turns.length}
+          onSend={onFollowUp}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function ReviewCommentEditor({
   agentId,
   agentLabel,
@@ -1386,7 +1542,7 @@ function ReviewCommentEditor({
   focusEditorRef: (node: MarkdownEditorHandle | null) => void;
   identity: GitIdentity | null;
   keymap: CodiffKeymap;
-  onAskCodex?: (commentId: string) => void;
+  onAskCodex?: (commentId: string, followUp?: string) => void;
   onCommentBlur: (comment: ReviewComment, body: string, flushDraft: () => void) => void;
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
@@ -1908,23 +2064,12 @@ function ReviewCommentEditor({
             <div className="review-comment-header codex">
               <strong>{agentLabel}</strong>
             </div>
-            <div
-              className={`review-comment-codex-reply${
-                comment.codexReply.status === 'loading' ? ' is-loading' : ''
-              }${comment.codexReply.status === 'error' ? ' error' : ''}`}
-            >
-              {comment.codexReply.status === 'loading' ? (
-                <span className="review-comment-codex-loading">Waiting for {agentLabel}…</span>
-              ) : (
-                <ReadOnlyMarkdown
-                  ariaLabel={`${agentLabel} reply`}
-                  className="review-comment-codex-reply-markdown"
-                  density="compact"
-                  value={comment.codexReply.body ?? comment.codexReply.error ?? ''}
-                  variant="embedded"
-                />
-              )}
-            </div>
+            <ReviewAssistantConversation
+              agentLabel={agentLabel}
+              commentId={comment.id}
+              onFollowUp={onAskCodex ? (question) => onAskCodex(comment.id, question) : undefined}
+              reply={comment.codexReply}
+            />
           </div>
         </div>
       ) : null}
@@ -1989,7 +2134,7 @@ function ReviewCommentThreadGroup({
   focusEditorRef: (node: MarkdownEditorHandle | null) => void;
   identity: GitIdentity | null;
   keymap: CodiffKeymap;
-  onAskCodex?: (commentId: string) => void;
+  onAskCodex?: (commentId: string, followUp?: string) => void;
   onCommentBlur: (comment: ReviewComment, body: string, flushDraft: () => void) => void;
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
@@ -2161,7 +2306,7 @@ function ReviewAnnotation({
   focusCommentRequest: number;
   identity: GitIdentity | null;
   keymap: CodiffKeymap;
-  onAskCodex?: (commentId: string) => void;
+  onAskCodex?: (commentId: string, followUp?: string) => void;
   onCommentBlur: (comment: ReviewComment, body: string, flushDraft: () => void) => void;
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCommentFocus: (comment: ReviewComment) => void;
@@ -2673,7 +2818,7 @@ export function ReviewCodeView({
   keymap: CodiffKeymap;
   loadingSectionIds: ReadonlySet<string>;
   onActiveBlockChange?: (blockId: string) => void;
-  onAskCodex?: (commentId: string) => void;
+  onAskCodex?: (commentId: string, followUp?: string) => void;
   onCommentDraftChange?: (comment: Pick<ReviewComment, 'body' | 'id'> | null) => void;
   onCreateComment: (comment: Omit<ReviewComment, 'body' | 'id'>) => void;
   onDeleteComment: (commentId: string) => void;
@@ -3513,7 +3658,9 @@ export function ReviewCodeView({
   }, []);
 
   const canCreateFileComments =
-    !isReadOnly && source.type === 'pull-request' && source.provider === 'gitlab';
+    !isReadOnly &&
+    source.type === 'pull-request' &&
+    (source.provider === 'gitlab' || source.provider === 'azure-devops');
 
   const createFileComment = useCallback(
     (meta: CodeViewItemMetadata, itemId: string) => {
@@ -3631,8 +3778,10 @@ export function ReviewCodeView({
           ...codeViewLayout,
           paddingBottom: bottomInset,
         },
+        lineDiffType: workerHighlighterOptions.lineDiffType,
         lineHoverHighlight: 'both',
         loadDiffFiles,
+        maxLineDiffLength: workerHighlighterOptions.maxLineDiffLength,
         onGutterUtilityClick: (range, context) => {
           if (isReadOnly || context.item.edit) {
             return;

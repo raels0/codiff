@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { CodiffReviewTheme } from '../../config/types.ts';
 import type { CodiffPreferences } from '../../types.ts';
 
 export const CODE_FONT_SIZE_DEFAULT = 13;
@@ -18,6 +19,7 @@ type UseDocumentAppearanceOptions = Pick<
 > & {
   cleanupCodeFontProperties?: boolean;
   clearEmptyCodeFontFamily?: boolean;
+  reviewTheme?: CodiffReviewTheme;
 };
 
 export function useDocumentAppearance({
@@ -25,6 +27,7 @@ export function useDocumentAppearance({
   clearEmptyCodeFontFamily = false,
   codeFontFamily,
   codeFontSize,
+  reviewTheme = 'neutral',
   theme,
 }: UseDocumentAppearanceOptions) {
   useEffect(() => {
@@ -35,6 +38,14 @@ export function useDocumentAppearance({
       root.setAttribute('data-theme', theme);
     }
   }, [theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-review-theme', reviewTheme);
+    return () => {
+      root.removeAttribute('data-review-theme');
+    };
+  }, [reviewTheme]);
 
   useEffect(() => {
     const root = document.documentElement;

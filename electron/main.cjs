@@ -372,7 +372,7 @@ const sendConfigChanged = () => {
 
 /** @param {Partial<CodiffConfig>} nextConfig */
 const updateConfig = (nextConfig) => {
-  config = {
+  const updatedConfig = {
     keymap: { ...config.keymap, ...nextConfig.keymap },
     settings: {
       ...config.settings,
@@ -398,8 +398,9 @@ const updateConfig = (nextConfig) => {
       piModel: normalizePiModel(nextConfig.settings?.piModel ?? config.settings.piModel),
     },
   };
+  writeConfig(updatedConfig);
+  config = updatedConfig;
   nativeTheme.themeSource = config.settings.theme;
-  writeConfig(config);
   refreshInstalledAgentFiles();
   sendConfigChanged();
   Menu.setApplicationMenu(buildApplicationMenu());
@@ -2028,6 +2029,13 @@ ipcMain.handle('codiff:setDiffStyle', (_event, value) => {
       diffStyle: value === 'unified' ? 'unified' : 'split',
     },
   });
+});
+
+ipcMain.handle('codiff:setReviewTheme', (_event, value) => {
+  if (value !== 'neutral' && value !== 'blue-amber') {
+    throw new TypeError('Unknown review theme.');
+  }
+  updateConfig({ settings: { ...config.settings, reviewTheme: value } });
 });
 
 ipcMain.handle('codiff:setShowOutdated', (_event, value) => {

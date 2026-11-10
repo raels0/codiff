@@ -153,7 +153,7 @@ test('a stale refresh keeps checkbox changes made while the lookup is in flight'
   expect((await refresh).viewedFiles).toEqual({ [file.path]: file.fingerprint });
 });
 
-test('does not sync local reviews or GitLab, or roll back a different PR', async () => {
+test('does not sync local reviews, GitLab, or Azure DevOps, or roll back a different PR', async () => {
   using alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
   const pending = Promise.withResolvers<void>();
   const setPullRequestFileViewed = vi.fn(() => pending.promise);
@@ -163,6 +163,7 @@ test('does not sync local reviews or GitLab, or roll back a different PR', async
   for (const localSource of [
     { type: 'working-tree' },
     { ...source, provider: 'gitlab' },
+    { ...source, provider: 'azure-devops' },
   ] satisfies ReadonlyArray<ReviewSource>) {
     harness.stateRef.current = { ...repository, source: localSource };
     harness.getSync().syncViewed(file, {}, { [file.path]: file.fingerprint });

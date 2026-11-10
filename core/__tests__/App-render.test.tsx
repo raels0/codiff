@@ -189,6 +189,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
     piModel: defaultSettings.piModel,
     renderMarkdownAs: defaultSettings.renderMarkdownAs,
     reviewCommentsPrefix: defaultSettings.reviewCommentsPrefix,
+    reviewTheme: defaultSettings.reviewTheme,
     showOutdated: false,
     showWhitespace: false,
     sidebarPosition: defaultSettings.sidebarPosition,
@@ -265,6 +266,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   })),
   setDiffStyle: vi.fn(async () => {}),
   setPullRequestFileViewed: vi.fn(async () => {}),
+  setReviewTheme: vi.fn(async () => {}),
   setShowOutdated: vi.fn(async () => {}),
   setWordWrap: vi.fn(async () => {}),
   sharePlan: vi.fn(async () => ({
@@ -1516,12 +1518,15 @@ test('before unload saves the current source and selected file for any reload tr
   expect(getReloadSelectionPath(selection, nextState)).toBe(changedFile.path);
 });
 
-test('Mod+K opens the command bar', async () => {
+test.each([
+  { key: 'P', shift: true },
+  { key: 'k', shift: false },
+])('Mod+$key (shift=$shift) opens the command palette', async ({ key, shift }) => {
   const changedFile = createChangedFile('src/app.ts');
   await using app = await renderAppForOpenFileShortcut(changedFile);
 
   await act(async () => {
-    dispatchModifiedKey('k');
+    dispatchModifiedKey(key, shift);
   });
 
   expect(app.container.querySelector('.command-bar-input')).not.toBeNull();
@@ -1529,6 +1534,95 @@ test('Mod+K opens the command bar', async () => {
     true,
   );
   expect(app.openFile).not.toHaveBeenCalled();
+});
+
+test.each([
+  { method: 'increaseCodeFontSize', title: 'Increase Code Font Size' },
+  { method: 'decreaseCodeFontSize', title: 'Decrease Code Font Size' },
+  { method: 'resetCodeFontSize', title: 'Reset Code Font Size' },
+] as const)('Commands button exposes and runs $title', async ({ method, title }) => {
+  const changedFile = createChangedFile('src/app.ts');
+  await using app = await renderAppForOpenFileShortcut(changedFile);
+  const openPalette = app.container.querySelector<HTMLButtonElement>(
+    '[aria-label="Open command palette"]',
+  )!;
+  await act(async () => openPalette.click());
+  const search = app.container.querySelector<HTMLInputElement>('[aria-label="Search commands"]')!;
+  expect(document.activeElement).toBe(search);
+  await act(async () => setInputValue(search, title));
+  const commands = app.container.querySelectorAll<HTMLButtonElement>('.command-bar-item');
+  expect(commands).toHaveLength(1);
+  expect(commands[0]!.textContent).toContain(title);
+  await act(async () =>
+    search.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+  );
+  expect(window.codiff[method]).toHaveBeenCalledOnce();
+  expect(app.container.querySelector('[aria-label="Command palette"]')).toBeNull();
+});
+
+test.each([
+  { reviewTheme: 'neutral', title: 'Review Theme: Neutral Review' },
+  { reviewTheme: 'blue-amber', title: 'Review Theme: Blue/Amber' },
+] as const)(
+  '$title applies a saved preference without reloading the review',
+  async ({ reviewTheme, title }) => {
+    let configChanged: ((config: ReturnType<typeof createDefaultConfig>) => void) | undefined;
+    const config = createDefaultConfig();
+    config.settings.theme = 'dark';
+    window.codiff = createCodiffMock({
+      getConfig: vi.fn(async () => config),
+      onConfigChanged: vi.fn((callback) => {
+        configChanged = callback;
+        return () => {};
+      }),
+      setReviewTheme: vi.fn(async (value) => {
+        configChanged?.({ ...config, settings: { ...config.settings, reviewTheme: value } });
+      }),
+    });
+    await using view = await renderReact(<App />);
+    await waitFor(() => expect(view.container.querySelector('.loading')).toBeNull());
+    const reads = vi.mocked(window.codiff.getRepositoryState).mock.calls.length;
+    await act(async () =>
+      view.container
+        .querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')!
+        .click(),
+    );
+    const search = view.container.querySelector<HTMLInputElement>(
+      '[aria-label="Search commands"]',
+    )!;
+    await act(async () => setInputValue(search, title));
+    await act(async () =>
+      search.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+    );
+    expect(window.codiff.setReviewTheme).toHaveBeenCalledWith(reviewTheme);
+    expect(document.documentElement.getAttribute('data-review-theme')).toBe(reviewTheme);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(view.container.querySelector('[aria-label="Command palette"]')).toBeNull();
+    expect(window.codiff.getRepositoryState).toHaveBeenCalledTimes(reads);
+  },
+);
+
+test('a failed review theme save keeps the review visible and reports the error', async () => {
+  window.codiff = createCodiffMock({
+    setReviewTheme: vi.fn(async () => {
+      throw new Error('Config is read-only');
+    }),
+  });
+  await using view = await renderReact(<App />);
+  await waitFor(() => expect(view.container.querySelector('.loading')).toBeNull());
+  await act(async () =>
+    view.container.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')!.click(),
+  );
+  const search = view.container.querySelector<HTMLInputElement>('[aria-label="Search commands"]')!;
+  await act(async () => setInputValue(search, 'Review Theme: Blue/Amber'));
+  await act(async () =>
+    search.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+  );
+  expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(
+    'Review theme change failed: Config is read-only',
+  );
+  expect(document.documentElement.getAttribute('data-review-theme')).toBe('neutral');
+  expect(view.container.querySelector('.app-shell')).not.toBeNull();
 });
 
 test('Mod+Shift+O opens the selected file in the editor', async () => {
@@ -3238,6 +3332,124 @@ test('clicking the change banner refreshes the repository in place', async () =>
   expect(appOccurrences - 1).toBeLessThanOrEqual(2);
   expect(container.textContent).not.toContain('-old\n+new\n');
 });
+
+test('PR refresh fetches the latest snapshot before history and preserves review UI state', async () => {
+  const source = {
+    baseSha: 'old-base',
+    headSha: 'old-head',
+    number: 12,
+    provider: 'azure-devops',
+    type: 'pull-request',
+    url: 'https://dev.azure.com/example/project/_git/repo/pullrequest/12',
+  } satisfies ReviewSource;
+  const initialState = {
+    ...repositoryState,
+    files: [createChangedFile('src/initial.ts')],
+    source,
+  } satisfies RepositoryState;
+  const refreshedState = {
+    ...initialState,
+    files: [...initialState.files, createChangedFile('src/added.ts')],
+    source: { ...source, baseSha: 'new-base', headSha: 'new-head' },
+  } satisfies RepositoryState;
+  const pending = Promise.withResolvers<RepositoryState>();
+  const getRepositoryState = vi
+    .fn<Window['codiff']['getRepositoryState']>()
+    .mockResolvedValueOnce(initialState)
+    .mockImplementation(() => pending.promise);
+  const getRepositoryHistory = vi.fn<Window['codiff']['getRepositoryHistory']>(async () => ({
+    entries: [],
+    root: '/repo',
+  }));
+  let refresh: (() => void) | undefined;
+  window.codiff = createCodiffMock({
+    getRepositoryHistory,
+    getRepositoryState,
+    onRefreshRequest: (callback) => {
+      refresh = callback;
+      return () => {};
+    },
+  });
+  await using app = await renderReact(<App />);
+  const button = () =>
+    app.container.querySelector<HTMLButtonElement>('[aria-label="Refresh pull request"]');
+  await waitFor(() => expect(button()).not.toBeNull());
+  const filter = app.container.querySelector<HTMLInputElement>(
+    '[aria-label="Filter changed files"]',
+  )!;
+  await act(async () => setInputValue(filter, 'src/'));
+  const historyRequests = getRepositoryHistory.mock.calls.length;
+  await act(async () => {
+    button()!.click();
+    button()!.click();
+    refresh?.();
+  });
+  expect(button()!.disabled).toBe(true);
+  expect(button()!.getAttribute('aria-busy')).toBe('true');
+  expect(button()!.textContent).toContain('Refreshing');
+  expect(getRepositoryState).toHaveBeenCalledTimes(2);
+  expect(getRepositoryHistory).toHaveBeenCalledTimes(historyRequests);
+  await act(async () => pending.resolve(refreshedState));
+  await waitFor(() => expect(app.container.textContent).toContain('added.ts'));
+  expect(getRepositoryHistory).toHaveBeenLastCalledWith(expect.any(Number), refreshedState.source);
+  expect(filter.value).toBe('src/');
+  expect(button()!.disabled).toBe(false);
+  expect(button()!.getAttribute('aria-busy')).toBe('false');
+});
+
+test.each(['state', 'history'] as const)(
+  'PR refresh shows %s failures, keeps the current review, and can retry',
+  async (failure) => {
+    const source = {
+      baseSha: 'old-base',
+      headSha: 'old-head',
+      number: 12,
+      provider: 'azure-devops',
+      type: 'pull-request',
+      url: 'https://dev.azure.com/example/project/_git/repo/pullrequest/12',
+    } satisfies ReviewSource;
+    const initialState = {
+      ...repositoryState,
+      files: [createChangedFile('src/initial.ts')],
+      source,
+    } satisfies RepositoryState;
+    const refreshedState = {
+      ...initialState,
+      files: [createChangedFile('src/updated.ts')],
+      source: { ...source, headSha: 'new-head' },
+    } satisfies RepositoryState;
+    const getRepositoryState = vi
+      .fn<Window['codiff']['getRepositoryState']>()
+      .mockResolvedValue(initialState);
+    const getRepositoryHistory = vi.fn<Window['codiff']['getRepositoryHistory']>(async () => ({
+      entries: [],
+      root: '/repo',
+    }));
+    window.codiff = createCodiffMock({ getRepositoryHistory, getRepositoryState });
+    await using app = await renderReact(<App />);
+    const button = () =>
+      app.container.querySelector<HTMLButtonElement>('[aria-label="Refresh pull request"]');
+    await waitFor(() => expect(button()).not.toBeNull());
+    getRepositoryState.mockResolvedValue(refreshedState);
+    const failingRequest = failure === 'state' ? getRepositoryState : getRepositoryHistory;
+    failingRequest.mockRejectedValueOnce(new Error('Remote PR is unavailable.'));
+    await act(async () => button()!.click());
+    await waitFor(() =>
+      expect(app.container.querySelector('[role="alert"]')?.textContent).toContain(
+        'Refresh failed: Remote PR is unavailable.',
+      ),
+    );
+    expect(app.container.textContent).toContain('initial.ts');
+    expect(app.container.textContent).not.toContain('updated.ts');
+    expect(button()!.disabled).toBe(false);
+    await act(async () =>
+      app.container.querySelector<HTMLButtonElement>('.repository-change-reload')!.click(),
+    );
+    await waitFor(() => expect(app.container.textContent).toContain('updated.ts'));
+    expect(app.container.querySelector('[role="alert"]')).toBeNull();
+    expect(button()!.disabled).toBe(false);
+  },
+);
 
 test('refreshing all changes re-resolves the branch snapshot', async () => {
   const initialSource = {

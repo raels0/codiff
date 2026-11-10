@@ -2,12 +2,15 @@
 import {
   cloneFileDiffMetadata,
   DiffHunksRenderer,
+  FileDiff,
   getSharedHighlighter,
   parseDiffFromFile,
   renderDiffWithHighlighter,
   type RenderDiffOptions,
 } from '@pierre/diffs';
 import { expect, test, vi } from 'vite-plus/test';
+import { codeViewUnsafeCSS, workerHighlighterOptions } from '../lib/code-view-options.ts';
+import { waitFor } from './helpers/react.tsx';
 
 const createFixture = async () => {
   const highlighter = await getSharedHighlighter({ langs: ['tsx'], themes: ['github-dark'] });
@@ -91,4 +94,59 @@ test('re-entering editing reuses the highlighted replacement diff', async () => 
     localHighlight.mockRestore();
     renderer.cleanUp();
   }
+});
+
+const renderInlineWords = async (before: string | null, after: string | null) => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const renderer = new FileDiff({
+    ...workerHighlighterOptions,
+    theme: 'github-dark',
+    themeType: 'dark',
+    unsafeCSS: codeViewUnsafeCSS,
+  });
+  try {
+    renderer.render({
+      containerWrapper: container,
+      fileDiff: parseDiffFromFile(
+        before == null ? null : { contents: before, name: 'source.txt' },
+        after == null ? null : { contents: after, name: 'source.txt' },
+      ),
+    });
+    await waitFor(() =>
+      expect(container.firstElementChild?.shadowRoot?.querySelector('[data-line]')).toBeTruthy(),
+    );
+    const root = container.firstElementChild!.shadowRoot!;
+    const words = (type: string) =>
+      Array.from(root.querySelectorAll(`[data-line-type="${type}"] [data-diff-span]`)).map(
+        (element) => element.textContent,
+      );
+    return { additions: words('change-addition'), deletions: words('change-deletion') };
+  } finally {
+    renderer.cleanUp();
+    container.remove();
+  }
+};
+
+test('inline edits emphasize changed words, not the surrounding expression', async () => {
+  expect(
+    await renderInlineWords(
+      'const result = cache.lookup(key);\n',
+      'const result = store.lookup(key);\n',
+    ),
+  ).toEqual({ additions: ['store'], deletions: ['cache'] });
+  expect(
+    await renderInlineWords(
+      'return original(before, stableArgument);\n',
+      'return updated(after, stableArgument);\n',
+    ),
+  ).toEqual({ additions: ['updated', 'after'], deletions: ['original', 'before'] });
+});
+
+test.each([
+  [null, 'startBatch();\ncollectJobs();\nfinishBatch();\n'],
+  ['startBatch();\ncollectJobs();\nfinishBatch();\n', null],
+  ['const stable = 1;\n', 'const stable = 1;\nstartBatch();\ncollectJobs();\nfinishBatch();\n'],
+])('whole added/deleted blocks remain gutter-only (%#)', async (before, after) => {
+  expect(await renderInlineWords(before, after)).toEqual({ additions: [], deletions: [] });
 });

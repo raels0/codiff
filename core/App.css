@@ -133,6 +133,13 @@
     color-scheme: dark;
   }
 
+  :root[data-review-theme='blue-amber'],
+  :root[data-review-theme='blue-amber'] .app-shell,
+  :root[data-review-theme='blue-amber'] .plan-shell {
+    --diff-addition: light-dark(#1d5eaa, #75b8ff);
+    --diff-deletion: light-dark(#945200, #e9b86b);
+  }
+
   *,
   *::before,
   *::after {
@@ -239,7 +246,7 @@
 }
 
 .squircle {
-  border-radius: 28px;
+  border-radius: 22px;
   corner-shape: squircle;
 }
 
@@ -647,7 +654,7 @@ html[data-codiff-platform='darwin'] .workspace-top-bar {
   .plan-comment-rail {
     background: var(--code-bg);
     border: 1px solid var(--file-border);
-    border-radius: var(--codiff-diff-radius, 28px);
+    border-radius: var(--codiff-diff-radius, 22px);
     bottom: 12px;
     box-shadow:
       0 0 0 1px rgb(255 255 255 / 0.03) inset,
@@ -831,7 +838,7 @@ html[data-codiff-platform='darwin'] .workspace-top-bar {
 
 .review-top-bar-branch {
   align-items: center;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--muted);
   corner-shape: squircle;
   display: inline-flex;
@@ -900,7 +907,7 @@ a.review-top-bar-source:focus-visible {
 .review-mode-control {
   -webkit-app-region: no-drag;
   align-items: center;
-  border-radius: 16px;
+  border-radius: 14px;
   corner-shape: squircle;
   display: inline-flex;
   flex: none;
@@ -919,7 +926,7 @@ a.review-top-bar-source:focus-visible {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--muted);
   corner-shape: squircle;
   cursor: pointer;
@@ -998,6 +1005,19 @@ a.review-top-bar-source:focus-visible {
   color: var(--sidebar-text);
 }
 
+.review-top-bar-text-button {
+  font: 600 11px/1.35 var(--font-sans);
+  gap: 5px;
+  padding: 0 6px;
+  width: auto;
+}
+
+.review-top-bar-text-button:disabled {
+  background: transparent;
+  cursor: default;
+  opacity: 0.5;
+}
+
 .sidebar-resizer {
   -webkit-app-region: no-drag;
   border-left: 1px solid var(--sidebar-border);
@@ -1051,7 +1071,7 @@ a.review-top-bar-source:focus-visible {
   align-items: center;
   background: color-mix(in srgb, var(--viewed) 10%, var(--code-bg));
   border: 1px solid color-mix(in srgb, var(--viewed) 18%, transparent);
-  border-radius: 17px;
+  border-radius: 14px;
   box-shadow: 0 16px 46px -30px color-mix(in srgb, var(--viewed) 52%, rgb(0 0 0));
   color: color-mix(in srgb, var(--viewed) 36%, var(--text));
   corner-shape: squircle;
@@ -1080,6 +1100,18 @@ a.review-top-bar-source:focus-visible {
 
 .repository-change-banner:not(.visible) {
   opacity: 0;
+}
+
+.repository-change-banner.error {
+  background: color-mix(in srgb, var(--danger) 10%, var(--code-bg));
+  border-color: color-mix(in srgb, var(--danger) 36%, transparent);
+  color: var(--danger);
+  max-width: min(680px, calc(100vw - 32px));
+}
+
+.repository-change-banner.error .repository-change-banner-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .repository-change-banner-content {
@@ -1132,7 +1164,7 @@ a.review-top-bar-source:focus-visible {
   align-items: flex-start;
   background: color-mix(in srgb, #d9822b 12%, var(--code-bg));
   border: 1px solid color-mix(in srgb, #d9822b 32%, transparent);
-  border-radius: 17px;
+  border-radius: 14px;
   box-shadow: 0 16px 46px -30px color-mix(in srgb, #d9822b 52%, rgb(0 0 0));
   color: color-mix(in srgb, #d9822b 32%, var(--text));
   corner-shape: squircle;
@@ -1180,7 +1212,7 @@ a.review-top-bar-source:focus-visible {
   backdrop-filter: blur(24px) saturate(1.35);
   background: color-mix(in srgb, var(--code-bg) 76%, transparent);
   border: 1px solid var(--file-border);
-  border-radius: 17px;
+  border-radius: 14px;
   box-shadow: 0 18px 58px -34px rgb(0 0 0 / 0.72);
   color: var(--text);
   corner-shape: squircle;
@@ -1347,7 +1379,7 @@ html[data-codiff-platform='darwin'] .sidebar {
   -webkit-app-region: no-drag;
   background: rgb(127 127 127 / 0.1);
   border: 0;
-  border-radius: 15px;
+  border-radius: 12px;
   color: var(--sidebar-text);
   corner-shape: squircle;
   font: 13px/1.35 var(--font-sans);
@@ -1746,7 +1778,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 }
 
 .code-view {
-  --codiff-diff-radius: 28px;
+  --codiff-diff-radius: 22px;
   background: var(--app-bg);
   contain: strict;
   display: block;
@@ -2248,7 +2280,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 }
 
 .merge-request-comments-source-description {
-  --codiff-diff-radius: 28px;
+  --codiff-diff-radius: 22px;
 
   border-radius: var(--codiff-diff-radius);
   box-shadow:
@@ -3250,7 +3282,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 
 .codiff-copy-path-button,
 .codiff-open-file-button {
-  border-radius: 15px;
+  border-radius: 12px;
   color: var(--copy-icon);
   corner-shape: squircle;
   flex: none;
@@ -3330,7 +3362,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 
 .codiff-chevron-box {
   align-items: center;
-  border-radius: 15px;
+  border-radius: 12px;
   corner-shape: squircle;
   display: inline-flex;
   height: 30px;
@@ -3431,7 +3463,7 @@ html[data-codiff-platform='darwin'] .sidebar {
 .codiff-markdown-button,
 .codiff-button,
 .codiff-viewed-button {
-  border-radius: 14px;
+  border-radius: 12px;
   corner-shape: squircle;
   font: 600 12px/1 var(--font-sans);
 }
@@ -4105,6 +4137,67 @@ diffs-container .review-comment-thread {
   padding: 8px 10px;
 }
 
+.review-comment-assistant-context {
+  border-bottom: 1px solid var(--file-border);
+  color: var(--text);
+  font: 12px/1.5 var(--font-sans);
+  overflow-wrap: anywhere;
+  padding: 8px 12px;
+}
+
+.review-comment-assistant-context summary {
+  cursor: pointer;
+}
+
+.review-comment-assistant-context div {
+  margin-top: 6px;
+}
+
+.review-comment-assistant-turn + .review-comment-assistant-turn,
+.review-comment-assistant-follow-up {
+  border-top: 1px solid var(--file-border);
+}
+
+.review-comment-assistant-question {
+  background: var(--file-bg);
+}
+
+.review-comment-assistant-follow-up {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  font: 13px/1.5 var(--font-sans);
+}
+
+.review-comment-assistant-follow-up textarea {
+  background: var(--file-bg);
+  border: 1px solid var(--file-border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  min-height: 64px;
+  padding: 8px;
+  resize: vertical;
+  width: 100%;
+}
+
+.review-comment-assistant-follow-up textarea:focus-visible {
+  outline: 2px solid var(--tree-selection-focus);
+  outline-offset: 2px;
+}
+
+.review-comment-assistant-follow-up > div {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.review-comment-assistant-follow-up span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .review-comment-codex-reply {
   color: var(--text);
   font: 13px/1.5 var(--font-sans);
@@ -4584,7 +4677,7 @@ diffs-container .review-comment-thread {
   backdrop-filter: blur(28px) saturate(1.4);
   background: color-mix(in srgb, var(--code-bg) 88%, transparent);
   border: 1px solid var(--file-border);
-  border-radius: 28px;
+  border-radius: 22px;
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.12) inset,
     0 18px 80px -54px rgb(0 0 0 / 0.78),
@@ -4717,7 +4810,7 @@ diffs-container .review-comment-thread {
   backdrop-filter: blur(28px) saturate(1.4);
   background: color-mix(in srgb, var(--code-bg) 88%, transparent);
   border: 1px solid var(--file-border);
-  border-radius: 28px;
+  border-radius: 22px;
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.12) inset,
     0 18px 80px -54px rgb(0 0 0 / 0.78),
@@ -4738,7 +4831,7 @@ diffs-container .review-comment-thread {
 .command-bar-input {
   background: rgb(127 127 127 / 0.1);
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   color: var(--text);
   corner-shape: squircle;
   font: 13px/1.35 var(--font-sans);
@@ -4863,7 +4956,7 @@ diffs-container .review-comment-thread {
 .open-review-source-input {
   background: rgb(127 127 127 / 0.1);
   border: 0;
-  border-radius: 17px;
+  border-radius: 14px;
   color: var(--text);
   corner-shape: squircle;
   font: 14px/1.35 var(--font-sans);

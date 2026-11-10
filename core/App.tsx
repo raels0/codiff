@@ -1,5 +1,7 @@
+import { ArrowClockwiseIcon as ArrowClockwise } from '@phosphor-icons/react/ArrowClockwise';
 import { ArrowSquareOutIcon as ArrowSquareOut } from '@phosphor-icons/react/ArrowSquareOut';
 import { ClockCounterClockwiseIcon as ClockCounterClockwise } from '@phosphor-icons/react/ClockCounterClockwise';
+import { MagnifyingGlassIcon as MagnifyingGlass } from '@phosphor-icons/react/MagnifyingGlass';
 import { PathIcon as Path } from '@phosphor-icons/react/Path';
 import { TreeStructureIcon as TreeStructure } from '@phosphor-icons/react/TreeStructure';
 import type { FileDiffLoadedFiles } from '@pierre/diffs';
@@ -207,6 +209,9 @@ export default function App({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySource, setHistorySource] = useState<ReviewSource | null>(null);
   const [localChangesDetected, setLocalChangesDetected] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [reviewThemeError, setReviewThemeError] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<CodiffUpdateStatus | null>(null);
   const [launchOptions, setLaunchOptions] = useState<CodiffLaunchOptions>(
     initialLaunchOptions ?? defaultLaunchOptions,
@@ -252,6 +257,7 @@ export default function App({
   const preferencesRef = useRef<CodiffPreferences>(initialPreferences);
   const selectedPathRef = useRef<string | null>(null);
   const sourceRequestRef = useRef(0);
+  const refreshInProgressRef = useRef(false);
   const stateGenerationRef = useRef(0);
   const markdownRefreshQueueRef = useRef<Promise<void>>(Promise.resolve());
   const viewedRef = useRef<Record<string, string>>({});
@@ -1196,6 +1202,7 @@ export default function App({
     clearEmptyCodeFontFamily: true,
     codeFontFamily: preferences.codeFontFamily,
     codeFontSize: preferences.codeFontSize,
+    reviewTheme: preferences.reviewTheme,
     theme: preferences.theme,
   });
 
@@ -1325,17 +1332,18 @@ export default function App({
     () => sidebarModeRef.current === 'walkthrough' && narrativeWalkthroughRef.current != null,
     [narrativeWalkthroughRef, sidebarModeRef],
   );
-  const { closeCommandBar, commandBarVisible, shortcutsHelpVisible } = useAppKeyboardShortcuts({
-    keymap: codiffConfig.keymap,
-    navigateHunks,
-    onFocusFileFilter: focusFileFilter,
-    onOpenDiffSearch: openDiffSearch,
-    onOpenSelectedFile: openSelectedFile,
-    onToggleSidebar: toggleSidebar,
-    onToggleWordWrap: toggleWordWrap,
-    shouldDeferHunkNavigation,
-    sidebarCollapsed,
-  });
+  const { closeCommandBar, commandBarVisible, openCommandBar, shortcutsHelpVisible } =
+    useAppKeyboardShortcuts({
+      keymap: codiffConfig.keymap,
+      navigateHunks,
+      onFocusFileFilter: focusFileFilter,
+      onOpenDiffSearch: openDiffSearch,
+      onOpenSelectedFile: openSelectedFile,
+      onToggleSidebar: toggleSidebar,
+      onToggleWordWrap: toggleWordWrap,
+      shouldDeferHunkNavigation,
+      sidebarCollapsed,
+    });
 
   useEffect(() => window.codiff.onFindInDiffs(openDiffSearch), [openDiffSearch]);
 
@@ -1380,16 +1388,19 @@ export default function App({
     [scrollPathIntoReview, setMainMode, setSelectedPath],
   );
 
-  // Refresh the repository state in place after the working tree changed.
+  // Refresh local changes or the remote PR snapshot in place.
   // Unlike a window reload, this keeps all review UI state (selection, scroll,
   // search, walkthrough navigation, commit drafts, pending comments) and only
   // re-renders the files whose fingerprints actually moved.
-  const refreshRepository = useCallback(() => {
+  const refreshRepository = useCallback(async () => {
     const previousState = stateRef.current;
-    if (!previousState || pendingSource) {
+    if (!previousState || pendingSource || refreshInProgressRef.current) {
       return;
     }
 
+    refreshInProgressRef.current = true;
+    setRefreshing(true);
+    setRefreshError(null);
     const request = sourceRequestRef.current + 1;
     sourceRequestRef.current = request;
     const refreshSource = getRefreshSource(previousState.source);
@@ -1397,80 +1408,90 @@ export default function App({
       ? getRefreshSource(historySourceRef.current)
       : undefined;
 
-    Promise.all([
-      getRepositoryState(refreshSource),
-      window.codiff.getRepositoryHistory(historyLimit, refreshHistorySource),
-    ])
-      .then(([nextState, history]) => {
-        if (sourceRequestRef.current !== request) {
-          return;
-        }
+    try {
+      const nextState = await getRepositoryState(refreshSource);
+      if (sourceRequestRef.current !== request) {
+        return;
+      }
 
-        const orderedState = {
-          ...nextState,
-          files: sortFiles(nextState.files),
-        };
-        const changedPaths = getChangedPaths(previousState.files, orderedState.files);
-        const walkthroughNeedsRefresh = haveChangedFiles(previousState.files, orderedState.files);
+      // History must use the newly resolved PR snapshot, not its previous head/base.
+      const history = await window.codiff.getRepositoryHistory(
+        historyLimit,
+        nextState.source.type === 'pull-request' ? nextState.source : refreshHistorySource,
+      );
+      if (sourceRequestRef.current !== request) {
+        return;
+      }
 
-        stateGenerationRef.current += 1;
-        stateRef.current = orderedState;
-        setState(orderedState);
-        setReloadDeltaPaths(changedPaths);
-        if (walkthroughNeedsRefresh) {
-          refreshWalkthroughForState(orderedState);
-        }
+      const orderedState = {
+        ...nextState,
+        files: sortFiles(nextState.files),
+      };
+      const changedPaths = getChangedPaths(previousState.files, orderedState.files);
+      const walkthroughNeedsRefresh = haveChangedFiles(previousState.files, orderedState.files);
+
+      stateGenerationRef.current += 1;
+      stateRef.current = orderedState;
+      setState(orderedState);
+      setReloadDeltaPaths(changedPaths);
+      if (walkthroughNeedsRefresh) {
+        refreshWalkthroughForState(orderedState);
+      }
+      for (const path of changedPaths) {
+        bumpItemVersion(path);
+      }
+      const nextViewed = readViewedForState(orderedState, viewedRef.current);
+      const viewedChangedPaths = new Set(
+        orderedState.files
+          .filter(
+            (file) =>
+              (viewedRef.current[file.path] === file.fingerprint) !==
+              (nextViewed[file.path] === file.fingerprint),
+          )
+          .map((file) => file.path),
+      );
+      viewedRef.current = nextViewed;
+      setViewed(nextViewed);
+      setCollapsed((current) => {
+        const next = new Set(current);
         for (const path of changedPaths) {
-          bumpItemVersion(path);
+          next.delete(path);
         }
-        const nextViewed = readViewedForState(orderedState, viewedRef.current);
-        const viewedChangedPaths = new Set(
-          orderedState.files
-            .filter(
-              (file) =>
-                (viewedRef.current[file.path] === file.fingerprint) !==
-                (nextViewed[file.path] === file.fingerprint),
-            )
-            .map((file) => file.path),
-        );
-        viewedRef.current = nextViewed;
-        setViewed(nextViewed);
-        setCollapsed((current) => {
-          const next = new Set(current);
-          for (const path of changedPaths) {
+        for (const path of viewedChangedPaths) {
+          if (nextViewed[path]) {
+            next.add(path);
+          } else {
             next.delete(path);
           }
-          for (const path of viewedChangedPaths) {
-            if (nextViewed[path]) {
-              next.add(path);
-            } else {
-              next.delete(path);
-            }
-          }
-          return next;
-        });
-        setExpandedReviewKeys(
-          (current) => new Set([...current].filter((key) => !viewedChangedPaths.has(key))),
-        );
-        setHistoryEntries(history.entries);
-        setHistoryHasMore(history.entries.length >= historyLimit);
-        setHistorySource(getHistorySource(orderedState.source) ?? historySourceRef.current);
-        setSelectedPath((current) =>
-          current != null && orderedState.files.some((file) => file.path === current)
-            ? current
-            : (orderedState.files[0]?.path ?? null),
-        );
-        if (
-          mainModeRef.current === 'commit' &&
-          (orderedState.source.type !== 'working-tree' || orderedState.files.length === 0)
-        ) {
-          setMainMode('review');
         }
-        setLocalChangesDetected(false);
-      })
-      .catch(() => {
-        // Keep the current state; the banner stays up as a retry affordance.
+        return next;
       });
+      setExpandedReviewKeys(
+        (current) => new Set([...current].filter((key) => !viewedChangedPaths.has(key))),
+      );
+      setHistoryEntries(history.entries);
+      setHistoryHasMore(history.entries.length >= historyLimit);
+      setHistorySource(getHistorySource(orderedState.source) ?? historySourceRef.current);
+      setSelectedPath((current) =>
+        current != null && orderedState.files.some((file) => file.path === current)
+          ? current
+          : (orderedState.files[0]?.path ?? null),
+      );
+      if (
+        mainModeRef.current === 'commit' &&
+        (orderedState.source.type !== 'working-tree' || orderedState.files.length === 0)
+      ) {
+        setMainMode('review');
+      }
+      setLocalChangesDetected(false);
+    } catch (error) {
+      if (sourceRequestRef.current === request) {
+        setRefreshError(getRepositoryLoadError(error).message);
+      }
+    } finally {
+      refreshInProgressRef.current = false;
+      setRefreshing(false);
+    }
   }, [
     bumpItemVersion,
     getRepositoryState,
@@ -1520,6 +1541,7 @@ export default function App({
       sourceRequestRef.current = request;
       setPendingSource(source);
       setLoadError(null);
+      setRefreshError(null);
       resetCommentFocus();
       setReloadDeltaPaths(new Set());
       resetDiffSearch();
@@ -1657,6 +1679,13 @@ export default function App({
     [showOpenReviewSourceDialog],
   );
 
+  const changeReviewTheme = useCallback((reviewTheme: CodiffPreferences['reviewTheme']) => {
+    setReviewThemeError(null);
+    void window.codiff.setReviewTheme(reviewTheme).catch((error: unknown) => {
+      setReviewThemeError(getRepositoryLoadError(error).message);
+    });
+  }, []);
+
   const commandBarCommands = useAppCommands({
     changeSidebarMode,
     focusFileFilter,
@@ -1665,6 +1694,7 @@ export default function App({
     onOpenReviewSource: showOpenReviewSourceDialog,
     onOpenSelectedFile: openSelectedFile,
     onRefreshRepository: refreshRepository,
+    onSetReviewTheme: changeReviewTheme,
     onToggleSidebar: toggleSidebar,
     onToggleViewed: toggleViewed,
     onToggleWordWrap: toggleWordWrap,
@@ -1905,7 +1935,10 @@ export default function App({
         reviewStatus={state.source.type === 'pull-request' ? state.source.reviewStatus : undefined}
         showCommentReview={
           state.source.type === 'pull-request' &&
-          (state.source.provider === 'github' || state.source.host === 'github.com')
+          (state.source.provider === 'github' ||
+            state.source.provider === 'azure-devops' ||
+            state.source.host === 'github.com' ||
+            state.source.host === 'dev.azure.com')
         }
       />
     ) : undefined,
@@ -1968,12 +2001,38 @@ export default function App({
       <div aria-hidden className="window-drag-region" />
       <ReviewTopBar
         actions={
-          <CopyCommentsButton
-            comments={isSwitchingSource ? emptyReviewComments : reviewComments}
-            files={orderedFiles}
-            reviewCommentsPrefix={preferences.reviewCommentsPrefix}
-            showWhitespace={showWhitespace}
-          />
+          <>
+            <button
+              aria-label="Open command palette"
+              className="review-top-bar-icon-button review-top-bar-text-button"
+              onClick={openCommandBar}
+              title={`Command palette (${getShortcutLabel(codiffConfig.keymap, 'commandBar')})`}
+              type="button"
+            >
+              <MagnifyingGlass aria-hidden size={16} weight="bold" />
+              Commands
+            </button>
+            {pullRequestUrl ? (
+              <button
+                aria-busy={refreshing}
+                aria-label="Refresh pull request"
+                className="review-top-bar-icon-button review-top-bar-text-button"
+                disabled={refreshing || isSwitchingSource}
+                onClick={refreshRepository}
+                title="Refresh pull request from remote"
+                type="button"
+              >
+                <ArrowClockwise aria-hidden size={16} weight="bold" />
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+            ) : null}
+            <CopyCommentsButton
+              comments={isSwitchingSource ? emptyReviewComments : reviewComments}
+              files={orderedFiles}
+              reviewCommentsPrefix={preferences.reviewCommentsPrefix}
+              showWhitespace={showWhitespace}
+            />
+          </>
         }
         context={
           <>
@@ -2025,8 +2084,20 @@ export default function App({
           'toggleSidebar',
         )})`}
       />
+      {reviewThemeError ? (
+        <div className="repository-change-banner error visible" role="alert">
+          <span className="repository-change-banner-content">
+            Review theme change failed: {reviewThemeError}
+          </span>
+          <button onClick={() => setReviewThemeError(null)} type="button">
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <RepositoryChangeBanner
+        error={refreshError}
         onRefresh={refreshRepository}
+        refreshing={refreshing}
         visible={
           localChangesDetected &&
           ((pendingSource ?? state.source).type === 'working-tree' ||

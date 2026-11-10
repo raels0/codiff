@@ -266,6 +266,13 @@ export const getReviewCommentsDigest = (comments: ReadonlyArray<ReviewComment>) 
         )}:${comment.codexReply?.status ?? ''}:${getCommentTextDigest(
           comment.codexReply?.body,
         )}:${getCommentTextDigest(comment.codexReply?.error)}:${
+          comment.codexReply?.turns
+            ?.map(
+              (turn) =>
+                `${getCommentTextDigest(turn.question)}:${getCommentTextDigest(turn.reply)}`,
+            )
+            .join(';') ?? ''
+        }:${
           comment.remoteSubmit?.status ?? ''
         }:${comment.remoteSubmit?.error ?? ''}:${comment.threadId ?? ''}:${
           comment.canResolveThread === true ? '1' : '0'

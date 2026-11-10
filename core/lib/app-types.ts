@@ -7,6 +7,8 @@ import type {
   NarrativeWalkthroughResult,
   PullRequestCodeQualityFinding,
   PullRequestExistingReviewComment,
+  ReviewAssistantContext,
+  ReviewAssistantTurn,
   ReviewSource,
 } from '../types.ts';
 
@@ -103,8 +105,12 @@ export type ReviewComment = {
   canResolveThread?: boolean;
   codexReply?: {
     body?: string;
+    context?: ReviewAssistantContext;
     error?: string;
+    question?: string;
+    reviewKey?: string;
     status: 'error' | 'loading' | 'ready';
+    turns?: ReadonlyArray<ReviewAssistantTurn>;
   };
   filePath: string;
   id: string;

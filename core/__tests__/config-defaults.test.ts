@@ -23,7 +23,7 @@ const {
 
 const readElectronConfig = (raw: unknown) => {
   using home = createTemporaryDirectorySync('codiff-config-home.');
-  using _environment = createTemporaryEnvironment({ HOME: home.path });
+  using _environment = createTemporaryEnvironment({ HOME: home.path, USERPROFILE: home.path });
   const configDirectory = join(home.path, '.codiff');
   mkdirSync(configDirectory);
   writeFileSync(join(configDirectory, 'codiff.jsonc'), `${JSON.stringify(raw)}\n`);
@@ -32,7 +32,7 @@ const readElectronConfig = (raw: unknown) => {
 
 const readElectronConfigText = (text: string) => {
   using home = createTemporaryDirectorySync('codiff-config-home.');
-  using _environment = createTemporaryEnvironment({ HOME: home.path });
+  using _environment = createTemporaryEnvironment({ HOME: home.path, USERPROFILE: home.path });
   const configDirectory = join(home.path, '.codiff');
   mkdirSync(configDirectory);
   writeFileSync(join(configDirectory, 'codiff.jsonc'), text);
@@ -56,6 +56,17 @@ test('schema defaults match config defaults', () => {
 
 test('electron and renderer defaults match', () => {
   expect(createElectronDefaultConfig()).toEqual(createDefaultConfig());
+});
+
+test('command palette bindings accept aliases and retain custom single shortcuts', () => {
+  const aliases = ['Mod+Shift+p', 'Mod+k'];
+  expect(readElectronConfig({ keymap: { commandBar: aliases } }).keymap.commandBar).toEqual(
+    aliases,
+  );
+  expect(readElectronConfig({ keymap: { commandBar: 'Alt+c' } }).keymap.commandBar).toBe('Alt+c');
+  expect(readElectronConfig({ keymap: { commandBar: ['Mod+p', 42] } }).keymap.commandBar).toEqual(
+    createDefaultConfig().keymap.commandBar,
+  );
 });
 
 test('electron config normalizes code font settings', () => {
@@ -84,6 +95,26 @@ test('electron config normalizes code font settings', () => {
   expect(readElectronConfig({ settings: { codeFontSize: 99 } }).settings.codeFontSize).toBe(32);
 });
 
+test('old and invalid review themes use the neutral preset', () => {
+  expect(readElectronConfig({}).settings.reviewTheme).toBe('neutral');
+  for (const reviewTheme of ['classic', null, 42]) {
+    expect(readElectronConfig({ settings: { reviewTheme } }).settings.reviewTheme).toBe('neutral');
+  }
+});
+
+test.each(['neutral', 'blue-amber'] as const)(
+  'review theme %s survives save and reload',
+  (reviewTheme) => {
+    using home = createTemporaryDirectorySync('codiff-review-theme.');
+    using _environment = createTemporaryEnvironment({ HOME: home.path, USERPROFILE: home.path });
+    const config = createDefaultConfig();
+    config.settings.reviewTheme = reviewTheme;
+    config.settings.theme = 'dark';
+    writeConfig(config);
+    expect(readConfig().settings).toMatchObject({ reviewTheme, theme: 'dark' });
+  },
+);
+
 test('electron config normalizes sidebar position', () => {
   expect(readElectronConfig({}).settings.sidebarPosition).toBe('left');
   expect(
@@ -100,7 +131,7 @@ test('old configurations retain automatic reasoning and custom values survive sa
     readElectronConfig({ settings: { openAIReasoningEffort: 42 } }).settings.openAIReasoningEffort,
   ).toBe('');
   using home = createTemporaryDirectorySync('codiff-model-config.');
-  using _environment = createTemporaryEnvironment({ HOME: home.path });
+  using _environment = createTemporaryEnvironment({ HOME: home.path, USERPROFILE: home.path });
   const configDirectory = join(home.path, '.codiff');
   mkdirSync(configDirectory);
   writeFileSync(

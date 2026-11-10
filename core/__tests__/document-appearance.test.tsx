@@ -8,6 +8,7 @@ import {
   normalizeCodeFontSizePreference,
   useDocumentAppearance,
 } from '../app/hooks/useDocumentAppearance.ts';
+import type { CodiffReviewTheme } from '../config/types.ts';
 import type { CodiffTheme } from '../types.ts';
 import { renderReact } from './helpers/react.tsx';
 
@@ -16,12 +17,14 @@ function DocumentAppearanceHarness({
   clearEmptyCodeFontFamily,
   codeFontFamily,
   codeFontSize,
+  reviewTheme,
   theme,
 }: {
   cleanupCodeFontProperties?: boolean;
   clearEmptyCodeFontFamily?: boolean;
   codeFontFamily: string;
   codeFontSize: number;
+  reviewTheme?: CodiffReviewTheme;
   theme: CodiffTheme;
 }) {
   useDocumentAppearance({
@@ -29,6 +32,7 @@ function DocumentAppearanceHarness({
     clearEmptyCodeFontFamily,
     codeFontFamily,
     codeFontSize,
+    reviewTheme,
     theme,
   });
   return null;
@@ -37,6 +41,7 @@ function DocumentAppearanceHarness({
 afterEach(() => {
   const root = document.documentElement;
   root.removeAttribute('data-theme');
+  root.removeAttribute('data-review-theme');
   root.style.removeProperty('--font-diff-line-height');
   root.style.removeProperty('--font-diff-mono');
   root.style.removeProperty('--font-diff-size');
@@ -60,17 +65,20 @@ test('document appearance manages theme and code font properties with cleanup', 
         clearEmptyCodeFontFamily
         codeFontFamily=""
         codeFontSize={14}
+        reviewTheme="blue-amber"
         theme="dark"
       />,
     );
 
     expect(root.getAttribute('data-theme')).toBe('dark');
+    expect(root.getAttribute('data-review-theme')).toBe('blue-amber');
     expect(root.style.getPropertyValue('--font-diff-mono')).toBe('');
     expect(root.style.getPropertyValue('--font-diff-size')).toBe('14px');
     expect(root.style.getPropertyValue('--font-diff-line-height')).toBe('22px');
   }
 
   expect(root.style.getPropertyValue('--font-diff-mono')).toBe('');
+  expect(root.hasAttribute('data-review-theme')).toBe(false);
   expect(root.style.getPropertyValue('--font-diff-size')).toBe('');
   expect(root.style.getPropertyValue('--font-diff-line-height')).toBe('');
 });
@@ -84,6 +92,7 @@ test('document appearance can preserve shared walkthrough font properties', asyn
     );
 
     expect(root.hasAttribute('data-theme')).toBe(false);
+    expect(root.getAttribute('data-review-theme')).toBe('neutral');
     expect(root.style.getPropertyValue('--font-diff-mono')).toBe('existing');
     expect(root.style.getPropertyValue('--font-diff-size')).toBe('13px');
     expect(root.style.getPropertyValue('--font-diff-line-height')).toBe('20px');

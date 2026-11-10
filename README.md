@@ -9,7 +9,7 @@ Codiff is a beautiful, minimal, local diff viewer for reviewing Git changes and 
 
 - **Fast Local Reviews:** Review and commit changes in any Git repository.
 - **LLM Walkthroughs:** Run `codiff -w` to generate an optimized commit walkthrough.
-- **Inline Review Comments:** Comment directly on GitHub pull requests and GitLab merge requests, or copy review comments as Markdown for follow-ups.
+- **Inline Review Comments:** Comment directly on GitHub pull requests, GitLab merge requests, and Azure DevOps pull requests, or copy review comments as Markdown for follow-ups.
 - **Lightweight Definition Navigation:** Mod/Ctrl-click an identifier to find likely local definitions without starting a language server.
 
 ## Download
@@ -48,20 +48,30 @@ Review the current branch against a target branch:
 codiff main
 ```
 
-Review a GitHub pull request or GitLab merge request using the current repository remote:
+Review a GitHub pull request, GitLab merge request, or Azure DevOps pull request using the current repository remote:
 
 ```bash
 codiff pr 75
 codiff pr owner:my-feature-branch
 codiff mr 23
+codiff ado 75
 ```
 
 Branch lookup uses `gh` and selects an open GitHub pull request. Include `owner:` for pull
-requests from forks.
+requests from forks. `codiff pr 75` also works against an Azure DevOps remote. `codiff ado 75`
+forces Azure DevOps when a repository has more than one review host.
 
-Full GitHub and GitLab review URLs are also supported. GitLab hosts and nested project paths are
-derived from the URL or local Git remote and authenticated through `glab`; Codiff does not require
-instance-specific configuration.
+Full GitHub, GitLab, and Azure DevOps review URLs are also supported. GitLab hosts and nested
+project paths are derived from the URL or local Git remote and authenticated through `glab`. Azure
+DevOps uses `az` (`az login`); Codiff searches PATH plus the usual Homebrew and `~/.local/bin`
+install locations, or `CODIFF_AZ_PATH` for an explicit binary.
+
+For Azure DevOps Services, open the repository locally, click **+ > Open PR**, and paste a
+`https://dev.azure.com/{organization}/{project}/_git/{repository}/pullrequest/{number}` URL.
+Legacy `{organization}.visualstudio.com` URLs and Azure SSH remotes are also supported.
+Codiff uses the PR's source and target commits from Azure DevOps and their merge-base, so the
+review does not depend on the checked-out branch or uncommitted changes. Git access to the
+repository and an Azure CLI login with permission to read the PR are required.
 
 Start with an LLM-generated narrative walkthrough. When generating a walkthrough without an
 explicit target, Codiff uses local changes when present and falls back to `HEAD` when the working
@@ -103,15 +113,20 @@ codiff --completions zsh > ~/.zsh/completions/_codiff
 
 Launching Codiff in multiple repositories opens a separate native window for each repository.
 
-## Command Bar
+## Command Palette
 
-Open the command bar with <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on macOS, or
-<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on other platforms. Type to filter commands, use
+Click **Commands** in the top toolbar, or open the palette with
+<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on macOS, or
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on other platforms.
+<kbd>Cmd</kbd>/<kbd>Ctrl</kbd>+<kbd>K</kbd> also works. Type to filter commands, use
 <kbd>Up</kbd>/<kbd>Down</kbd> to move through results, press <kbd>Enter</kbd> to run the selected
 command, and press <kbd>Esc</kbd> to close it.
 
-The command bar includes actions for common review workflows:
+The command palette includes actions for common review workflows:
 
+- Increase, Decrease, and Reset Code Font Size
+- Review Theme: Neutral Review or Blue/Amber
+- Open PR, Branch, Commit, or Folder
 - Focus File Filter
 - Find in Diffs
 - Show File Tree, Show History, and Show Walkthrough
@@ -121,7 +136,45 @@ The command bar includes actions for common review workflows:
 - Toggle Diff Layout, with the target layout action shown as the hint
 - Open the currently selected file in your editor
 - Toggle Sidebar
-- Reload Window
+- Refresh Changes, including remote PR state
+
+## Review Themes
+
+Both review presets keep code and line-number backgrounds neutral, including entirely new or
+deleted files. Gutter bars and file status show additions and deletions. Small in-place edits
+receive precise word highlights with a faint tint, thin rounded outline, and underline,
+without replacing syntax colors or highlighting unchanged punctuation between edited words.
+Syntax colors are contrast-tuned for both presets in light and dark appearance.
+
+Open **Commands**, search for **review theme**, and choose **Neutral Review** (the default,
+green/red markers) or **Blue/Amber**. The selection is saved as `settings.reviewTheme`
+(`"neutral"` or `"blue-amber"`) and applies immediately without reloading the PR.
+Light/dark appearance remains controlled separately by `settings.theme`.
+
+## Ask About a Review
+
+**Ask** uses your selection as a starting point, not a boundary. It receives the
+changed-file list and changes across the review. For pull requests, it can read
+related files from the exact before/after commits without using your checkout.
+Large reviews are read in smaller pieces, with additional file and text lookups
+when needed.
+
+Each answer includes an expandable context summary with the saved version and any
+missing or shortened material. If the review or question changes while an answer
+is being prepared, ask again rather than relying on an outdated answer.
+
+The shared instructions are written in plain English in
+[`electron/prompts/review-assistant.md`](electron/prompts/review-assistant.md).
+They ask for direct answers and file/line references, not just rewritten comments.
+
+Use **Ask a follow-up** below an answer to continue the conversation. Earlier
+questions and answers stay visible and are included with the next question.
+Click **Send**, or press <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>; plain
+<kbd>Enter</kbd> adds a new line. Failed follow-ups keep the conversation and your
+draft so you can retry. **Ask** on the original note starts a fresh conversation.
+After the reviewed code or original question changes, start fresh rather than
+mixing answers from different versions. Conversations that exceed the input
+limit report an explicit error instead of silently dropping earlier exchanges.
 
 ## Configuration
 
@@ -135,7 +188,7 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json",
+  "$schema": "https://raw.githubusercontent.com/raels0/codiff/feat/azure-devops-prs/core/config/codiff-config.schema.json",
   "settings": {
     "agentBackend": "codex",
     "claudeModel": "sonnet",
@@ -149,13 +202,14 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
     "openAIReasoningEffort": "",
     "opencodeModel": "opencode-default",
     "sidebarPosition": "left",
+    "reviewTheme": "neutral",
     "showWhitespace": false,
     "theme": "system",
     "walkthroughPrompt": "",
     "wordWrap": false,
   },
   "keymap": {
-    "commandBar": "Mod+k",
+    "commandBar": ["Mod+Shift+p", "Mod+k"],
     "diffSearch": "Mod+f",
     "fileFilter": "Mod+p",
     "nextSearchMatch": "Enter",

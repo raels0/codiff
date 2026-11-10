@@ -1,164 +1,194 @@
 // @ts-check
 
-const { parseJSONMessage, truncate } = require('./agent-shared.cjs');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { parseJSONMessage } = require('./agent-shared.cjs');
+const { createReviewAssistantContext } = require('./review-assist-context.cjs');
 
-const MAX_PATCH_CHARS = 24_000;
-const MAX_OTHER_FILES = 40;
-const MAX_SOURCE_DESCRIPTION_CHARS = 4_000;
+/** @typedef {import('../core/types.ts').RepositoryState} RepositoryState */
+/** @typedef {import('../core/types.ts').ReviewAssistantRequest} ReviewAssistantRequest */
+/** @typedef {import('./review-assist-context.cjs').ContextRead} ContextRead */
+/** @typedef {import('./agent.cjs').Agent} Agent */
+/** @typedef {import('./agent.cjs').AgentOptions} AgentOptions */
 
-/**
- * @typedef {import('../core/types.ts').ChangedFile} ChangedFile
- * @typedef {import('../core/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../core/types.ts').ReviewAssistantRequest} ReviewAssistantRequest
- * @typedef {import('./agent.cjs').Agent} Agent
- * @typedef {import('./agent.cjs').AgentOptions} AgentOptions
- */
-
+const instructions = readFileSync(join(__dirname, 'prompts', 'review-assistant.md'), 'utf8');
+const MAX_READ_ROUNDS = 3;
+const views = new Set(['files', 'changes', 'before', 'after']);
 const reviewAssistantSchema = {
   additionalProperties: false,
   properties: {
     reply: { type: 'string' },
+    requests: {
+      items: {
+        additionalProperties: false,
+        properties: {
+          path: { type: 'string' },
+          search: { type: 'string' },
+          startLine: { minimum: 1, type: 'integer' },
+          view: { enum: [...views], type: 'string' },
+        },
+        required: ['path', 'search', 'startLine', 'view'],
+        type: 'object',
+      },
+      maxItems: 6,
+      type: 'array',
+    },
     version: { const: 1, type: 'number' },
   },
-  required: ['version', 'reply'],
+  required: ['version', 'reply', 'requests'],
   type: 'object',
 };
 
-/** @param {ChangedFile} file */
-const getFileDigest = (file) => ({
-  oldPath: file.oldPath,
-  path: file.path,
-  status: file.status,
-  summaries: file.sections
-    .map((section) => section.summary?.reason)
-    .filter((summary) => typeof summary === 'string' && summary.trim()),
-});
-
-/** @param {RepositoryState} state @param {Partial<ReviewAssistantRequest> | null | undefined} request */
-const buildReviewAssistantInput = (state, request) => {
-  /** @type {Partial<ReviewAssistantRequest['comment']>} */
-  const comment = request?.comment ?? {};
-  const file = state.files.find((candidate) => candidate.path === comment.filePath);
-  const section = file?.sections.find((candidate) => candidate.id === comment.sectionId);
-
-  return {
-    comment: {
-      anchor: comment.anchor,
-      body: typeof comment.body === 'string' ? comment.body : '',
-      filePath: comment.filePath,
-      lineNumber: comment.lineNumber,
-      side: comment.side,
-      startLineNumber: comment.startLineNumber,
-      startSide: comment.startSide,
-    },
-    focus: file
-      ? {
-          file: getFileDigest(file),
-          patchExcerpt: section
-            ? truncate(section.patch || section.summary?.reason || '', MAX_PATCH_CHARS)
-            : 'No patch context available.',
-          section: section
-            ? {
-                binary: section.binary,
-                kind: section.kind,
-                loadState: section.loadState,
-                summary: section.summary?.reason,
-              }
-            : null,
-        }
-      : null,
-    nearbyFiles: state.files
-      .filter((candidate) => candidate.path !== comment.filePath)
-      .slice(0, MAX_OTHER_FILES)
-      .map(getFileDigest),
-    root: state.root,
-    source:
-      state.source.type === 'pull-request' && typeof state.source.description === 'string'
-        ? {
-            ...state.source,
-            description: truncate(state.source.description, MAX_SOURCE_DESCRIPTION_CHARS),
-          }
-        : state.source,
-    walkthroughNote: request?.walkthroughNote ?? null,
-  };
+/** @param {unknown} input @returns {{reply: string; requests: ContextRead[]}} */
+const readResponse = (input) => {
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    !('reply' in input) ||
+    typeof input.reply !== 'string' ||
+    !('version' in input) ||
+    input.version !== 1
+  ) {
+    throw new Error(
+      'The assistant did not return an answer or a valid request for more context. Ask again.',
+    );
+  }
+  const requests = 'requests' in input ? input.requests : undefined;
+  if (
+    !Array.isArray(requests) ||
+    requests.length > 6 ||
+    requests.some(
+      (read) =>
+        !read ||
+        typeof read !== 'object' ||
+        typeof read.path !== 'string' ||
+        typeof read.search !== 'string' ||
+        read.search.length > 2000 ||
+        !Number.isSafeInteger(read.startLine) ||
+        read.startLine < 1 ||
+        !views.has(read.view),
+    )
+  ) {
+    throw new Error('The assistant returned an invalid request for review context. Ask again.');
+  }
+  return { reply: input.reply.replace(/\n{3,}/g, '\n\n').trim(), requests };
 };
-
-/** @param {RepositoryState} state @param {Partial<ReviewAssistantRequest> | null | undefined} request @param {string} [agentLabel] */
-const buildReviewAssistantPrompt = (
-  state,
-  request,
-  agentLabel = 'Codex',
-) => `You are ${agentLabel} inside Codiff.
-
-A human reviewer wrote a rough inline review note and clicked Ask ${agentLabel}.
-Reply as a concise assistant in the same inline conversation.
-Use only the repository change digest below; do not inspect the repository or run shell commands.
-If there is walkthrough context, use it as review orientation, not as proof.
-If source.description is present, treat it as author-written PR/MR intent and orientation, not proof of behavior. The changed files and patch excerpt remain the source of truth for what changed.
-You are the code-review expert in this conversation, so explain the change directly.
-
-Your job:
-- Turn vague unease into coherent, actionable review feedback.
-- If the note asks "why", explain why this change is needed based on the diff.
-- If useful, suggest a clearer review comment the human could use.
-- Prefer questions and concrete risks over accusations.
-- Do not hedge. Avoid words and phrases like "appears", "seems", "might", "likely", "probably", "I think", "I suspect", and "the intent".
-- Say "This change introduces...", "This change moves...", or "This is needed because..." instead of "This change appears to...".
-- If the diff does not provide enough evidence, state the concrete uncertainty after the explanation.
-- Do not say the change is correct unless the diff proves it.
-- Do not invent bugs, unstated requirements, or files outside the digest.
-- Keep the reply under 180 words.
-- Markdown is allowed.
-
-Repository change digest:
-${JSON.stringify(buildReviewAssistantInput(state, request), null, 2)}
-`;
-
-/** @param {unknown} value @param {string} [fallback] */
-const cleanReply = (value, fallback = '') =>
-  (typeof value === 'string' ? value : fallback).replace(/\n{3,}/g, '\n\n').trim();
-
-/** @param {unknown} input @param {string} [agentLabel] */
-const normalizeReviewAssistantReply = (input, agentLabel = 'Codex') => ({
-  reply: cleanReply(
-    input && typeof input === 'object' && 'reply' in input ? input.reply : undefined,
-    `${agentLabel} could not produce a useful reply.`,
-  ),
-  version: 1,
-});
 
 /**
  * @param {RepositoryState} state
  * @param {ReviewAssistantRequest} request
  * @param {Agent} agent
  * @param {AgentOptions} agentOptions
+ * @returns {Promise<import('../core/types.ts').ReviewAssistantResult>}
  */
 const readReviewAssistantReply = async (state, request, agent, agentOptions) => {
+  let context;
   try {
-    const response = await agent.run(
-      state.root,
-      buildReviewAssistantPrompt(state, request, agent.label),
-      reviewAssistantSchema,
-      'review-assistant.json',
-      `${agent.label} review reply timed out.`,
-      agentOptions,
-    );
-    const parsed = parseJSONMessage(response);
-
-    return {
-      reply: normalizeReviewAssistantReply(parsed, agent.label).reply,
-      status: 'ready',
-    };
-  } catch (error) {
-    if (agent.isNotFoundError(error)) {
-      return {
-        code: agent.notFoundCode,
-        reason: error instanceof Error ? error.message : String(error),
-        status: 'unavailable',
-      };
+    if (!request?.comment?.body?.trim() || request.comment.body.length > 16_000) {
+      throw new Error('Ask a question of no more than 16,000 characters.');
     }
-
+    const previousTurns = request.previousTurns === undefined ? [] : request.previousTurns;
+    if (
+      !Array.isArray(previousTurns) ||
+      previousTurns.some(
+        (turn) =>
+          !turn ||
+          typeof turn.question !== 'string' ||
+          !turn.question.trim() ||
+          typeof turn.reply !== 'string' ||
+          !turn.reply.trim(),
+      )
+    ) {
+      throw new Error(
+        'The earlier conversation is incomplete. Use Ask on the original note to start again.',
+      );
+    }
+    if (
+      previousTurns.reduce((size, turn) => size + turn.question.length + turn.reply.length, 0) >
+      64_000
+    ) {
+      throw new Error(
+        'This conversation is too long to send in full. Use Ask on the original note to start a new conversation.',
+      );
+    }
+    context = await createReviewAssistantContext(state, request);
+    const source = state.source;
+    const description = source.type === 'pull-request' ? source.description || '' : '';
+    if (description.length > 6000) context.warn('The PR description was shortened for length.');
+    const location = request.comment;
+    const overview = [
+      '# Reviewer’s question',
+      location.body,
+      previousTurns.length
+        ? `# Earlier conversation\n\n${previousTurns
+            .map(
+              (turn, index) =>
+                `## Exchange ${index + 1}\n\n### Reviewer\n${turn.question}\n\n### Assistant\n${turn.reply}`,
+            )
+            .join('\n\n')}`
+        : '',
+      '# Selected location',
+      `${location.filePath}${location.lineNumber ? `:${location.startLineNumber || location.lineNumber}–${location.lineNumber}` : ''}${location.side ? ` (${location.side})` : ''}`,
+      '# Review',
+      source.type === 'pull-request'
+        ? `${source.title || 'Pull request'}\n${source.url}`
+        : source.type,
+      context.summary().version ? `Before → after commits: ${context.summary().version}` : '',
+      description
+        ? `## Author’s description\n${description.slice(0, 6000)}${description.length > 6000 ? '\n[Description shortened for length.]' : ''}`
+        : '',
+      request.walkthroughNote
+        ? `## Earlier review notes\nWhat to check: ${request.walkthroughNote.context}\nWhy: ${request.walkthroughNote.reason}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    let material = `${overview}\n\n${context.material}`;
+    const deadline = Date.now() + (agentOptions?.timeoutMs || agent.defaultTimeoutMs || 300_000);
+    for (let round = 0; round <= MAX_READ_ROUNDS; round += 1) {
+      const timeoutMs = deadline - Date.now();
+      if (timeoutMs <= 0)
+        throw new Error('The review answer timed out while reading additional context. Ask again.');
+      if (round === MAX_READ_ROUNDS)
+        context.warn('This answer has reached the limit for additional context reads.');
+      const limits = context.summary().warnings;
+      const prompt = instructions
+        .replace('{{AGENT_NAME}}', () => agent.label)
+        .replace(
+          '{{REVIEW_MATERIAL}}',
+          () =>
+            `${material}\n\n# Context limits\n${limits.length ? limits.map((warning) => `- ${warning}`).join('\n') : 'All changed files and their text changes are included.'}${round === MAX_READ_ROUNDS ? '\nNo further reads are available. Answer using the supplied material and explain any remaining gaps.' : ''}`,
+        );
+      const response = readResponse(
+        parseJSONMessage(
+          await agent.run(
+            state.root,
+            prompt,
+            reviewAssistantSchema,
+            'review-assistant.json',
+            `${agent.label} review reply timed out.`,
+            { ...agentOptions, timeoutMs },
+          ),
+        ),
+      );
+      if (response.requests.length === 0) {
+        if (!response.reply) throw new Error('The assistant returned an empty answer. Ask again.');
+        return { context: context.summary(), reply: response.reply, status: 'ready' };
+      }
+      if (round === MAX_READ_ROUNDS) {
+        throw new Error(
+          'The assistant needs more context than this answer can include. Ask a narrower question.',
+        );
+      }
+      const additions = [];
+      for (const read of response.requests) additions.push(await context.read(read));
+      material += `\n\n# Additional review material\n${additions.join('\n\n')}`;
+    }
+    throw new Error('The assistant could not finish this answer.');
+  } catch (error) {
     return {
+      ...(context ? { context: context.summary() } : {}),
+      ...(agent.isNotFoundError(error) ? { code: agent.notFoundCode } : {}),
       reason: error instanceof Error ? error.message : String(error),
       status: 'unavailable',
     };

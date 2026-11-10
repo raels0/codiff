@@ -28,7 +28,7 @@
   backdrop-filter: blur(28px) saturate(1.4);
   background: color-mix(in srgb, var(--code-bg) 92%, transparent);
   border: 1px solid var(--file-border);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.08) inset,
     0 12px 32px -18px rgb(0 0 0 / 0.6),
@@ -47,7 +47,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--text);
   corner-shape: squircle;
   cursor: pointer;
